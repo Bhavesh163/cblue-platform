@@ -20,6 +20,7 @@ import {
   projectPersistedFixerVariation,
   resolvePersistedFixerWorkflowSnapshot,
 } from '../blue-bridge/blue-bridge.service';
+import { providerDisplayName } from '../../common/provider-display-name';
 
 // Valid status transitions
 const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -106,6 +107,7 @@ function projectOrderWorkflow(
   partnerUserId?: string | null,
   viewerUserId?: string | null,
 ) {
+  const authoritativePartnerName = providerDisplayName(order.fixer, '');
   const workflowEvents = (order.workflowActions || []).flatMap((event: any) => {
     const actorUserId = String(event?.actorUserId || '');
     const actorRole =
@@ -184,6 +186,12 @@ function projectOrderWorkflow(
 
   return {
     ...order,
+    ...(authoritativePartnerName
+      ? {
+          fixerName: authoritativePartnerName,
+          partnerName: authoritativePartnerName,
+        }
+      : {}),
     ...workflowSnapshot,
     workflowEvents,
     meeting: projectPersistedFixerMeeting(order),

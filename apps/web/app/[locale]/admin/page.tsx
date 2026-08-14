@@ -62,6 +62,8 @@ type SkillRow = {
 
 type FixerRow = {
   id: string;
+  publicDisplayName?: string | null;
+  verifiedCompanyName?: string | null;
   tier?: string | null;
   aiTier?: string | null;
   status?: string | null;
@@ -94,6 +96,8 @@ type OrderRow = {
     email?: string | null;
   } | null;
   fixer?: {
+    publicDisplayName?: string | null;
+    verifiedCompanyName?: string | null;
     user?: {
       name?: string | null;
       phone?: string | null;
@@ -189,6 +193,8 @@ function formatDate(value: string | null | undefined) {
 
 function getFixerName(fixer: FixerRow) {
   return (
+    fixer.publicDisplayName ||
+    fixer.verifiedCompanyName ||
     fixer.user?.name ||
     fixer.user?.email ||
     fixer.user?.phone ||
@@ -202,6 +208,8 @@ function getCustomerName(order: OrderRow) {
 
 function getProviderName(order: OrderRow) {
   return (
+    order.fixer?.publicDisplayName ||
+    order.fixer?.verifiedCompanyName ||
     order.fixer?.user?.name ||
     order.fixer?.user?.email ||
     order.fixer?.user?.phone ||

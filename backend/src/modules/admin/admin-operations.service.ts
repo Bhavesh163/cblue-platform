@@ -10,6 +10,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { providerDisplayName } from '../../common/provider-display-name';
 import { UpdateDemandGapDto } from './dto/update-demand-gap.dto';
 
 const INCIDENT_ACTIONS = ['partner-decline', 'customer-cancel'] as const;
@@ -73,6 +74,8 @@ export class AdminOperationsService {
               user: { select: { id: true, name: true, email: true } },
               fixer: {
                 select: {
+                  publicDisplayName: true,
+                  verifiedCompanyName: true,
                   user: { select: { id: true, name: true, email: true } },
                 },
               },
@@ -102,6 +105,8 @@ export class AdminOperationsService {
               fixer: {
                 select: {
                   userId: true,
+                  publicDisplayName: true,
+                  verifiedCompanyName: true,
                   user: { select: { name: true, email: true } },
                 },
               },
@@ -175,6 +180,8 @@ export class AdminOperationsService {
               fixer: {
                 select: {
                   userId: true,
+                  publicDisplayName: true,
+                  verifiedCompanyName: true,
                   user: { select: { name: true, email: true } },
                 },
               },
@@ -196,6 +203,12 @@ export class AdminOperationsService {
         const actor = partnerAuthored
           ? event.order.fixer?.user
           : event.order.user;
+        const actorName = partnerAuthored
+          ? providerDisplayName(
+              event.order.fixer,
+              actor?.name || actor?.email || 'CBLUE user',
+            )
+          : actor?.name || actor?.email || 'CBLUE user';
         return [
           {
             id: event.id,
@@ -205,7 +218,7 @@ export class AdminOperationsService {
               ? ('PARTNER_DECLINE' as const)
               : ('CUSTOMER_CANCEL' as const),
             actorId: event.actorUserId,
-            actorName: actor?.name || actor?.email || 'CBLUE user',
+            actorName,
             reason: this.readReason(event.payload),
             createdAt: event.createdAt,
           },
@@ -246,6 +259,12 @@ export class AdminOperationsService {
         const actor = partnerAuthored
           ? event.order.fixer?.user
           : event.order.user;
+        const actorName = partnerAuthored
+          ? providerDisplayName(
+              event.order.fixer,
+              actor?.name || actor?.email || 'CBLUE user',
+            )
+          : actor?.name || actor?.email || 'CBLUE user';
         return [
           {
             id: event.id,
@@ -255,7 +274,7 @@ export class AdminOperationsService {
               ? ('PARTNER_DECLINE' as const)
               : ('CUSTOMER_CANCEL' as const),
             actorId: event.changedBy,
-            actorName: actor?.name || actor?.email || 'CBLUE user',
+            actorName,
             reason: this.readStatusReason(event.note),
             createdAt: event.createdAt,
           },
@@ -292,10 +311,14 @@ export class AdminOperationsService {
       method: payment.method,
       transactionRef: payment.transactionRef,
       customer: payment.order.user.name || payment.order.user.email || null,
-      partner:
-        payment.order.fixer?.user.name ||
-        payment.order.fixer?.user.email ||
-        null,
+      partner: payment.order.fixer
+        ? providerDisplayName(
+            payment.order.fixer,
+            payment.order.fixer.user.name ||
+              payment.order.fixer.user.email ||
+              'CBLUE partner',
+          )
+        : null,
       paidAt: payment.paidAt || payment.createdAt,
     }));
 

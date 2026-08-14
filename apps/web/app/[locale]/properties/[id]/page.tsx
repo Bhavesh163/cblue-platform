@@ -210,8 +210,7 @@ export default function PropertyDetailPage() {
 
   const siteLocation = getPropertySiteLocation(property);
   const contactDisplayName =
-    String(property.contactName || "CBLUE Lister").trim().split(/\s+/)[0] ||
-    "CBLUE";
+    String(property.contactName || "CBLUE Lister").trim() || "CBLUE";
 
   return (
     <div className="bg-gray-50 min-h-screen">

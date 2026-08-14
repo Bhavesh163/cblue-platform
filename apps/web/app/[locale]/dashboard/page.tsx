@@ -332,10 +332,21 @@ const pickProjectDetails = (...values: any[]) => {
   }
   return "";
 };
-const firstNameOnly = (value: any, fallback = 'User') => {
+const fullDisplayName = (value: any, fallback = 'User') => {
   const cleaned = String(value || '').trim();
-  return cleaned ? cleaned.split(/\s+/)[0] || fallback : fallback;
+  return cleaned || fallback;
 };
+const providerNameFromOrder = (order: any, fallback = 'Partner') =>
+  fullDisplayName(
+    order?.fixer?.publicDisplayName ||
+      order?.fixer?.verifiedCompanyName ||
+      order?.partner?.displayName ||
+      order?.fixerName ||
+      order?.partnerName ||
+      order?.fixerAlias ||
+      order?.fixer?.user?.name,
+    fallback,
+  );
 const HIDDEN_TEST_POS = new Set(["PO-2605-2747", "PO-2605-6716", "PO-2605-9605", "PO-2605-8699", "PO-2605-9701", "PO-2605-6146", "PO-2605-8471", "PO-2605-9593", "PO-2605-4465"]);
 const isHiddenTestPo = (value: any) => HIDDEN_TEST_POS.has(String(value || '').trim().toUpperCase());
 const CLOSED_CUSTOMER_WORKFLOW_POS = new Set([
@@ -957,7 +968,7 @@ export default function DashboardPage() {
     service: (o.serviceCategory || "").replace(/_/g, " "),
     serviceTh: (o.serviceCategory || "").replace(/_/g, " "),
     serviceZh: (o.serviceCategory || "").replace(/_/g, " "),
-    partner: o.fixer?.user?.name || "Pending matching",
+    partner: providerNameFromOrder(o, "Pending matching"),
     date: fmtDate(o.createdAt),
     progress: o.status === 'COMPLETED' ? 100 : o.status === 'IN_PROGRESS' ? 50 : 20,
     tier: o.description?.toUpperCase().includes("TIER:ECONOMY") ? "ECONOMY" : o.description?.toUpperCase().includes("TIER:STANDARD") ? "Standard" : o.description?.toUpperCase().includes("TIER:CORPORATE") ? "Corporate" : o.description?.toUpperCase().includes("TIER:SPECIALIST") ? "Specialist" : o.description?.toUpperCase().includes("TIER:EXPERT") ? "Expert" : "Standard",
@@ -2693,7 +2704,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         po,
         orderId: order.id,
         title: String(order.serviceCategory || order.serviceTh || 'Service').replace(/_/g, ' '),
-        customer: order.fixerName || order.fixerAlias || 'Suppadesh',
+        customer: providerNameFromOrder(order),
         date: fmtDateTime(createdAt),
         createdAt,
         budget: order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0',
@@ -2822,9 +2833,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
           customer:
             pendingMeeting?.customer ||
             existingActive?.customer ||
-            order?.fixerName ||
-            order?.partnerName ||
-            'Suppadesh',
+            providerNameFromOrder(order),
           date: fmtDateTime(createdAt),
           createdAt,
           budget:
@@ -3377,10 +3386,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         orderId: o.id,
         po,
         title: (o.serviceCategory || '').replace(/_/g, ' '),
-        customer: o.fixer?.user?.name || o.partnerName || 'Partner',
-        customerName: o.fixer?.user?.name || o.partnerName || 'Partner',
-        fixerAlias: o.fixer?.user?.name || o.partnerName || 'Partner',
-        partnerName: o.fixer?.user?.name || o.partnerName || 'Partner',
+        customer: providerNameFromOrder(o),
+        customerName: providerNameFromOrder(o),
+        fixerAlias: providerNameFromOrder(o),
+        partnerName: providerNameFromOrder(o),
         date: toDisplayDateTime(o.createdAt),
         createdAt: parseDateMs(o.createdAt),
         budget: o.estimatedPrice ? `฿${Number(o.estimatedPrice).toLocaleString()}` : '฿0',
@@ -3447,7 +3456,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         po,
         orderId: order.id,
         title: activeItem?.title || String(order.serviceCategory || order.service || 'Service').replace(/_/g, ' '),
-        customer: activeItem?.fixerAlias || activeItem?.partnerName || order.fixerName || order.partnerName || 'Partner',
+        customer: activeItem?.fixerAlias || activeItem?.partnerName || providerNameFromOrder(order),
         budget: activeItem?.budget || (order.estimatedPrice ? `\u0E3F${Number(order.estimatedPrice).toLocaleString()}` : "\u0E3F0"),
         tier: activeItem?.tier || String(order.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard',
         desc: 'Please send a meeting invitation to your partner. Fill in the venue and proposed date/time.',
@@ -3511,8 +3520,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         po,
         orderId: order.id,
         title: activeItem?.title || String(order.serviceCategory || order.service || 'Service').replace(/_/g, ' '),
-        customer: activeItem?.fixerAlias || activeItem?.partnerName || order.fixer?.user?.name || order.fixerName || order.partnerName || 'Partner',
-        customerName: activeItem?.customerName || activeItem?.fixerAlias || activeItem?.partnerName || order.fixer?.user?.name || 'Partner',
+        customer: activeItem?.fixerAlias || activeItem?.partnerName || providerNameFromOrder(order),
+        customerName: activeItem?.customerName || activeItem?.fixerAlias || activeItem?.partnerName || providerNameFromOrder(order),
         budget: activeItem?.budget || (order.estimatedPrice ? `฿${Number(order.estimatedPrice).toLocaleString()}` : '฿0'),
         tier: activeItem?.tier || String(order?.description || '').match(/TIER:([A-Za-z]+)/)?.[1] || 'Standard',
         date: fmtDateTime(createdAt),
@@ -3607,8 +3616,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         po: p.poNumber,
         title: p.propertyTitle,
         service: p.propertyTitle,
-        fixerAlias: firstNameOnly(p.listerName, 'Lister'),
-        partnerName: firstNameOnly(p.listerName, 'Lister'),
+        fixerAlias: fullDisplayName(p.listerName, 'Lister'),
+        partnerName: fullDisplayName(p.listerName, 'Lister'),
         location: siteLocation,
         subdistrict: p.subdistrict || p.district || p.province,
         budget: toCurrencyLabel(p.propertyPrice),
@@ -3850,10 +3859,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     ...order,
     id: `fixer-meeting-${order.po}`,
     title: String(order.serviceCategory || order.service || order.title || 'Service').replace(/_/g, ' '),
-    customer: firstNameOnly(
-      order.fixer?.user?.name || order.partnerName || order.fixerName,
-      'Partner',
-    ),
+    customer: providerNameFromOrder(order),
     meetingDate: order.meetingDate || order.meeting?.date || '',
     meetingTime: order.meetingTime || order.meeting?.time || '',
     meetingVenue: order.meetingVenue || order.meeting?.venue || '',
@@ -4549,7 +4555,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">🏠</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 5 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{fullDisplayName(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ผู้ลงประกาศยืนยันแล้ว — ชำระค่าดำเนินการเพื่อรับข้อมูลติดต่อ" : locale === "zh" ? "房源方已确认 — 支付处理费以获取联系方式" : "Lister accepted — pay the processing fee to get contact info"}</p>
@@ -4577,7 +4583,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="w-10 h-10 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center font-bold text-lg">📅</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 7 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{fullDisplayName(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "ชำระแล้ว — ส่งคำเชิญนัดหมายเพื่อเยี่ยมชมทรัพย์สิน" : locale === "zh" ? "已付款 — 发送会议邀请以预约参观" : "Fee paid — send a meeting invitation to schedule a property viewing"}</p>
@@ -4602,7 +4608,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             <div className="w-10 h-10 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center font-bold text-lg">⭐</div>
             <div>
               <h3 className="font-bold text-gray-900">{p.propertyTitle} <span className="text-sm font-normal text-gray-500">· {getPropOrderLabel(p.poNumber)} · Step 8 of 8</span></h3>
-              <p className="text-sm text-gray-600 mt-0.5">{firstNameOnly(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
+              <p className="text-sm text-gray-600 mt-0.5">{fullDisplayName(p.listerName, 'Lister')} · {getPropSummaryLocation(p)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(p.listingType)} · {locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(p.propertyPrice)} · {locale === "th" ? "ค่าธรรมเนียม" : locale === "zh" ? "费用" : "Fee"}: {toCurrencyLabel(p.propertyFee)}</p>
               <p className="text-xs text-gray-500 mt-0.5">{locale === "th" ? "อัปเดตเมื่อ" : locale === "zh" ? "更新时间" : "Updated"}: {fmtDateTime(p.updatedAt || p.createdAt || Date.now())}</p>
               <p className="text-xs text-gray-500 mt-1">{locale === "th" ? "นัดหมายยืนยันแล้ว — ให้คะแนนเพื่อปิดงาน" : locale === "zh" ? "会议已确认 — 评分以结案" : "Meeting confirmed — rate to close this inquiry"}</p>
@@ -4710,8 +4716,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         id: `prop-completed-${p.id}`,
         po: p.poNumber,
         service: p.propertyTitle || 'Property Inquiry',
-        counterpartName: firstNameOnly(p.listerName, 'Lister'),
-        partnerName: firstNameOnly(p.listerName, 'Lister'),
+        counterpartName: fullDisplayName(p.listerName, 'Lister'),
+        partnerName: fullDisplayName(p.listerName, 'Lister'),
         completedAt,
         createdAt: p.createdAt || completedAt,
         statusChangedAt: completedAt,
@@ -4740,7 +4746,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       if (!po || isHiddenTestPo(po)) return map;
       const existing = map.get(po) || {};
       const service = String(entry.serviceCategory || entry.service || entry.title || existing.service || po).replace(/_/g, ' ');
-      const counterpartName = firstNameOnly(entry.fixer?.user?.name || entry.fixerName || entry.partnerName || entry.customer || existing.counterpartName, 'Partner');
+      const counterpartName = providerNameFromOrder(
+        entry,
+        fullDisplayName(entry.customer || existing.counterpartName, 'Partner'),
+      );
       const completedAt = entry.completedAt || entry.updatedAt || entry.statusChangedAt || entry.createdAt || entry.date || existing.completedAt || Date.now();
       const fee = entry.fee || entry.budget || (entry.estimatedPrice ? `฿${Number(entry.estimatedPrice).toLocaleString()}` : existing.fee || '฿0');
       const projectDetails = pickProjectDetails(
@@ -5088,7 +5097,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 const statusMeta = getPropertyFlowSnapshot(p);
                 const complianceHints = getPropertyComplianceHints(p);
                 const media = Array.isArray(p.propertyImages) ? p.propertyImages.map((url) => normalizeImageUrl(url)).filter(Boolean) : [];
-                const listerFirstName = firstNameOnly(p.listerName, 'Lister');
+                const listerDisplayName = fullDisplayName(p.listerName, 'Lister');
                 const siteLocation = getPropSummaryLocation(p);
                 const updatedAt = p.updatedAt || p.createdAt || Date.now();
 
@@ -5110,7 +5119,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                           {p.propertyTier || 'STANDARD'}
                         </span>
                         <h3 className="font-bold text-gray-900 mt-2">{p.propertyTitle} <span className="text-sm font-normal text-gray-400">· {getPropOrderLabel(p.poNumber)}</span></h3>
-                        <p className="text-sm text-gray-600 mt-1">{listerFirstName} · {siteLocation}</p>
+                        <p className="text-sm text-gray-600 mt-1">{listerDisplayName} · {siteLocation}</p>
                       </div>
                       <div className="flex flex-col items-start md:items-end gap-1">
                         <span className={`text-xs font-bold px-3 py-1 rounded-full ${statusMeta.badge}`}>{statusMeta.label}</span>
@@ -5144,7 +5153,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                         <p><span className="text-gray-500">{locale === 'th' ? 'ระดับบริการ' : locale === 'zh' ? '服务等级' : 'Tier'}:</span> {String(p.propertyTier || 'STANDARD').toUpperCase()}</p>
                         <p><span className="text-gray-500">{locale === 'th' ? 'ราคา' : locale === 'zh' ? '价格' : 'Price'}:</span> {toCurrencyLabel(p.propertyPrice)}</p>
                         <p className="sm:col-span-2"><span className="text-gray-500">{locale === 'th' ? 'สถานที่' : locale === 'zh' ? '位置' : 'Location'}:</span> {siteLocation}</p>
-                        <p><span className="text-gray-500">{locale === 'th' ? 'ผู้ลงประกาศ' : locale === 'zh' ? '房源方' : 'Lister'}:</span> {listerFirstName}</p>
+                        <p><span className="text-gray-500">{locale === 'th' ? 'ผู้ลงประกาศ' : locale === 'zh' ? '房源方' : 'Lister'}:</span> {listerDisplayName}</p>
                       </div>
                     </div>
 
@@ -5318,7 +5327,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                                 <span className="text-xs text-gray-900 font-bold">🏠 {p.propertyTitle} ({getPropOrderLabel(p.poNumber)})</span>
                                 <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-1 rounded-full font-bold">{formatPropMeetingLabel(p.meetingDate, p.meetingTime)}</span>
                             </div>
-                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {firstNameOnly(p.listerName, 'Lister')}</p>
+                            <p className="text-[11px] text-gray-600">{locale === "th" ? "สถานที่:" : "Venue:"} {p.meetingVenue || 'TBD'} | {locale === "th" ? "ผู้ลงประกาศ:" : "Lister:"} {fullDisplayName(p.listerName, 'Lister')}</p>
                           </div>
                         ),
                       }));
@@ -5464,7 +5473,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}</span><span className="font-semibold">{toCurrencyLabel(propPayModal.propertyPrice)}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "จังหวัด" : "Province"}</span><span className="font-semibold">{propPayModal.province}</span></div>
                 <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "สถานที่โครงการ" : locale === "zh" ? "项目地点" : "Site Location"}</span><span className="font-semibold text-right max-w-[60%] break-words">{getPropModalLocation(propPayModal)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{firstNameOnly(propPayModal.listerName, 'Lister')}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">{locale === "th" ? "ผู้ลงประกาศ" : "Lister"}</span><span className="font-semibold">{fullDisplayName(propPayModal.listerName, 'Lister')}</span></div>
                 <div className="flex justify-between border-t border-gray-100 pt-2">
                   <span className="text-gray-700 font-semibold">{locale === "th" ? "ค่าดำเนินการ" : "Processing Fee"}</span>
                   <span className="font-extrabold text-green-700 text-lg">฿{propPayModal.propertyFee}</span>
@@ -5580,7 +5589,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               <button onClick={() => setPropRateModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
             </div>
             <div className="px-6 py-5 space-y-4">
-              <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${firstNameOnly(propRateModal.listerName, 'Lister')}` : `Rate your experience with: ${firstNameOnly(propRateModal.listerName, 'Lister')}`}</p>
+              <p className="text-sm text-gray-600">{locale === "th" ? `ให้คะแนนประสบการณ์กับ: ${fullDisplayName(propRateModal.listerName, 'Lister')}` : `Rate your experience with: ${fullDisplayName(propRateModal.listerName, 'Lister')}`}</p>
               <p className="text-xs font-semibold text-yellow-700 uppercase">{locale === "th" ? "ระดับบริการ" : locale === "zh" ? "服务等级" : "Tier"}: {propRateModal.propertyTier || "STANDARD"}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "รูปแบบประกาศ" : locale === "zh" ? "交易类型" : "Listing"}: {getPropListingTypeLabel(propRateModal.listingType)}</p>
               <p className="text-xs text-gray-500">{locale === "th" ? "มูลค่า" : locale === "zh" ? "总价" : "Value"}: {toCurrencyLabel(propRateModal.propertyPrice)}</p>
@@ -5690,7 +5699,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 typeOfWork={rateModal.title || String(rateModalOrder?.serviceCategory || rateModalOrder?.service || 'Project').replace(/_/g, ' ')}
                 actionText={locale === "th" ? "ให้คะแนนพาร์ทเนอร์ที่เลือกเพื่อปิดงานและย้ายไปยังประวัติ" : locale === "zh" ? "评价已选合作伙伴，以关闭项目并移至历史记录。" : "Rate the selected partner to close this project and move it to history."}
                 po={rateModal.po || '-'}
-                partnerName={firstNameOnly(rateModal.customer || rateModalOrder?.customer || rateModalOrder?.fixerName, locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
+                partnerName={fullDisplayName(rateModal.customer || rateModalOrder?.customer || providerNameFromOrder(rateModalOrder), locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
                 budget={toCurrencyLabel(rateModal.budget || rateModalOrder?.budget || rateModalOrder?.fee)}
                 location={rateModalOrder?.address?.subdistrict || rateModalOrder?.subdistrict || rateModalOrder?.location || (locale === "th" ? "ไม่ทราบ" : locale === "zh" ? "未知" : "Unknown")}
                 projectDetails={stripWorkflowPrefix(rateModalOrder?.description || rateModal.desc || rateModal.title || '')}
@@ -5819,7 +5828,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Selected Partner</span>
-                  <span className="font-bold text-gray-900">{firstNameOnly(waitModalOrder.request?.customer, 'Suppadesh')}</span>
+                  <span className="font-bold text-gray-900">{fullDisplayName(waitModalOrder.request?.customer, 'Partner')}</span>
                 </div>
                 <div className="flex justify-between items-center px-4 py-2.5 bg-sky-50 border-b border-gray-100">
                   <span className="text-xs text-gray-500 uppercase tracking-wider">Budget</span>
@@ -5986,7 +5995,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Selected Partner</label>
-                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{firstNameOnly(meetingModal.customer, 'Partner')}</div>
+                  <div className="bg-gray-50 rounded-xl px-4 py-2 text-sm font-bold text-gray-800">{fullDisplayName(meetingModal.customer, 'Partner')}</div>
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 font-semibold uppercase tracking-wider block mb-1">Project Location</label>
@@ -6269,7 +6278,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 typeOfWork={variationApproveModal.title || String(variationApproveOrder?.serviceCategory || variationApproveOrder?.service || 'Project').replace(/_/g, ' ')}
                 actionText={locale === "th" ? "ตรวจสอบคำขอเปลี่ยนแปลงจากพาร์ทเนอร์และอนุมัติหากคุณตกลงดำเนินการต่อ" : locale === "zh" ? "查看合作伙伴的变更请求，如同意继续则批准。" : "Review the partner variation request and approve it if you agree to proceed."}
                 po={variationApproveModal.po || '-'}
-                partnerName={firstNameOnly(variationApproveModal.customer || variationApproveOrder?.customer || variationApproveOrder?.fixerName, locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
+                partnerName={fullDisplayName(variationApproveModal.customer || variationApproveOrder?.customer || providerNameFromOrder(variationApproveOrder), locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
                 budget={toCurrencyLabel(variationApproveModal.budget || variationApproveOrder?.budget || variationApproveOrder?.fee)}
                 location={(() => {
                   const lat = Number(variationApproveOrder?.address?.latitude);
@@ -6445,7 +6454,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                 typeOfWork={completeApproveModal.title || String(completeApproveOrder?.serviceCategory || completeApproveOrder?.service || 'Project').replace(/_/g, ' ')}
                 actionText={locale === "th" ? "ตรวจสอบคำขอยืนยันงานเสร็จและยืนยันเมื่อโครงการเสร็จสมบูรณ์จริง" : locale === "zh" ? "查看完成请求，并在项目确实完成后确认。" : "Review the completion request and confirm it when the project is truly complete."}
                 po={completeApproveModal.po || '-'}
-                partnerName={firstNameOnly(completeApproveModal.customer || completeApproveOrder?.customer || completeApproveOrder?.fixerName, locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
+                partnerName={fullDisplayName(completeApproveModal.customer || completeApproveOrder?.customer || providerNameFromOrder(completeApproveOrder), locale === "th" ? "พาร์ทเนอร์" : locale === "zh" ? "合作伙伴" : "Partner")}
                 budget={toCurrencyLabel(completeApproveModal.budget || completeApproveOrder?.budget || completeApproveOrder?.fee)}
                 location={(() => {
                   const lat = Number(completeApproveOrder?.address?.latitude);

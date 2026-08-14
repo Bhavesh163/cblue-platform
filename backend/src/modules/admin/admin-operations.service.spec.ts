@@ -43,7 +43,11 @@ describe('AdminOperationsService', () => {
           orderType: 'HOUSEHOLD',
           serviceCategory: 'PLUMBING',
           user: { id: 'customer-1', name: 'Customer', email: null },
-          fixer: { user: { id: 'partner-1', name: 'Partner', email: null } },
+          fixer: {
+            publicDisplayName: 'Construction Blue',
+            verifiedCompanyName: 'Construction Blue',
+            user: { id: 'partner-1', name: 'Director Name', email: null },
+          },
         },
       },
       {
@@ -88,6 +92,7 @@ describe('AdminOperationsService', () => {
     expect(result.revenue.monthly).toEqual([
       { period: '2026-07', amount: 100, count: 1 },
     ]);
+    expect(result.revenue.details[0]?.partner).toBe('Construction Blue');
   });
 
   it('keeps persisted decline and cancellation actions with their real reasons and timestamps', async () => {
@@ -106,7 +111,9 @@ describe('AdminOperationsService', () => {
           user: { name: 'Customer', email: null },
           fixer: {
             userId: 'partner-1',
-            user: { name: 'Partner', email: null },
+            publicDisplayName: 'Construction Blue',
+            verifiedCompanyName: 'Construction Blue',
+            user: { name: 'Director Name', email: null },
           },
         },
       },
@@ -117,7 +124,7 @@ describe('AdminOperationsService', () => {
     expect(result.incidents).toEqual([
       expect.objectContaining({
         eventType: 'PARTNER_DECLINE',
-        actorName: 'Partner',
+        actorName: 'Construction Blue',
         reason: 'Schedule conflict for the requested date',
         createdAt,
       }),

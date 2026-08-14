@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UserService } from './user.service';
+import type { UserContactProfile } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -22,6 +23,13 @@ export class UserController {
   @Get('me')
   getProfile(@CurrentUser('id') userId: string) {
     return this.userService.getProfile(userId);
+  }
+
+  @Get('me/contact-profile')
+  getContactProfile(
+    @CurrentUser('id') userId: string,
+  ): Promise<UserContactProfile> {
+    return this.userService.getContactProfile(userId);
   }
 
   @Put('me')

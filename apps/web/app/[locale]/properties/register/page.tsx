@@ -26,21 +26,18 @@ type ProfileSessionState = "checking" | "authenticated" | "anonymous" | "unavail
 function readContactProfile(value: unknown): AuthenticatedContact | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  const name = typeof record.name === "string" ? record.name.trim() : "";
+  if (record.profileFallback === true || record.profileComplete === false) return null;
+  const name =
+    typeof record.providerDisplayName === "string" && record.providerDisplayName.trim()
+      ? record.providerDisplayName.trim()
+      : typeof record.name === "string"
+        ? record.name.trim()
+        : "";
   const email = typeof record.email === "string" ? record.email.trim() : "";
   const phone = typeof record.phone === "string" ? record.phone.trim() : "";
   const role = typeof record.role === "string" ? record.role : undefined;
   if (!name || !email || !phone) return null;
   return { name, email, phone, role };
-}
-
-function readCachedContactProfile(raw: string | null): AuthenticatedContact | null {
-  if (!raw) return null;
-  try {
-    return readContactProfile(JSON.parse(raw) as unknown);
-  } catch {
-    return null;
-  }
 }
 
 
@@ -205,18 +202,8 @@ export default function PropertyRegisterPage() {
           return;
         }
 
-        const cachedProfile = readCachedContactProfile(stored);
-        if (active && cachedProfile) {
-          setForm((prev) => ({
-            ...prev,
-            contactName: cachedProfile.name,
-            contactPhone: cachedProfile.phone || "",
-            contactEmail: cachedProfile.email || "",
-          }));
-        }
-
         const profileResponse = await fetchWithSubscriberSession(
-          "/api/v1/users/me",
+          "/api/v1/users/me/contact-profile",
           { cache: "no-store" },
           token,
         );
@@ -428,7 +415,7 @@ export default function PropertyRegisterPage() {
         localStorage.setItem("subscriber_token", authData.accessToken);
         localStorage.setItem("subscriber", JSON.stringify(authData.subscriber));
         const profileResponse = await fetchWithSubscriberSession(
-          "/api/v1/users/me",
+          "/api/v1/users/me/contact-profile",
           { cache: "no-store" },
           authData.accessToken,
         );
@@ -632,7 +619,7 @@ export default function PropertyRegisterPage() {
       <div className="relative overflow-hidden">
         <Image src="/images/scenic-house.jpg" alt="" fill sizes="100vw" className="object-cover" priority />
         <div className="absolute inset-0 bg-gradient-to-r from-green-900/90 to-emerald-800/75" />
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-14 text-center">
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 text-center">
           <span className="inline-block px-4 py-1.5 bg-white/10 backdrop-blur text-green-200 rounded-full text-sm font-bold mb-4 border border-white/20">🏠 {locale === "th" ? "ลงประกาศอสังหาริมทรัพย์" : locale === "zh" ? "发布房产" : "List Property"}</span>
           <h1 className="text-3xl sm:text-4xl font-bold text-white">{t("registerTitle")}</h1>
           <p className="mt-3 text-green-100">{t("registerDesc")}</p>
@@ -642,7 +629,7 @@ export default function PropertyRegisterPage() {
 
       {/* Form */}
       <section className="py-10">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <form onSubmit={handleSubmit}  className="space-y-8">
 
             {/* Account Authentication — Inline Login / Register */}

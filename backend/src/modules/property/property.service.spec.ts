@@ -105,12 +105,17 @@ describe('PropertyService', () => {
       expect(prisma.property.create).not.toHaveBeenCalled();
     });
 
-  it('persists contact details from the authenticated user profile', async () => {
+  it('persists verified company identity and fixer phone from the authenticated profile', async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: 'user-1',
-      name: 'Profile Owner',
+      name: 'Director Name',
       email: 'profile@example.com',
-      phone: '+66819999999',
+      phone: null,
+      fixer: {
+        contactPhone: '+66819999999',
+        publicDisplayName: 'Construction Blue',
+        verifiedCompanyName: 'Construction Blue',
+      },
     });
     prisma.property.create.mockResolvedValue({ id: 'property-3' });
 
@@ -131,7 +136,7 @@ describe('PropertyService', () => {
     expect(prisma.property.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          contactName: 'Profile Owner',
+          contactName: 'Construction Blue',
           contactPhone: '+66819999999',
           contactEmail: 'profile@example.com',
         }),

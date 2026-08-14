@@ -395,7 +395,11 @@ describe('OrderService', () => {
           id: 'order-1',
           userId: 'customer-1',
           fixerId: 'fixer-1',
-          fixer: { userId: 'partner-1' },
+          fixer: {
+            userId: 'partner-1',
+            publicDisplayName: 'Construction Blue',
+            verifiedCompanyName: 'Construction Blue',
+          },
           status: OrderStatus.IN_PROGRESS,
           workflowPhase: 'VARIATION',
           description: 'PO-2607-9458 | Cladding roofing',
@@ -420,6 +424,8 @@ describe('OrderService', () => {
       const result = await service.findByUser('customer-1');
 
       expect(result[0]).toMatchObject({
+        fixerName: 'Construction Blue',
+        partnerName: 'Construction Blue',
         sourceVersion: 'cblue-fixer-workflow-v1',
         currentStep: 9,
         totalSteps: 11,

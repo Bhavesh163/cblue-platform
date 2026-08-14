@@ -3,6 +3,18 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
+import { providerDisplayName } from '../../common/provider-display-name';
+
+export type UserContactProfile = {
+  id: string;
+  name: string;
+  legalName: string;
+  email: string;
+  phone: string;
+  role: string;
+  companyIdentityVerified: boolean;
+  profileComplete: boolean;
+};
 
 @Injectable()
 export class UserService {
@@ -53,6 +65,9 @@ export class UserService {
               completedJobs: true,
               responseTime: true,
               verified: true,
+              publicDisplayName: true,
+              verifiedCompanyName: true,
+              companyIdentityVerifiedAt: true,
               aiTier: true,
               aiScore: true,
               aiBreakdown: true,
@@ -296,10 +311,16 @@ export class UserService {
           }
         : null;
     const fixer = user.fixer ?? fallbackFixer;
+    const authoritativeProviderName = providerDisplayName(
+      fixer ? { ...fixer, user } : { user },
+      String(user.name || user.email || '').trim(),
+    );
 
     return {
       ...user,
       company: user.company ?? null,
+      legalName: user.name,
+      providerDisplayName: authoritativeProviderName,
       fixer: fixer
         ? {
             aiTier: null,
@@ -320,11 +341,55 @@ export class UserService {
             skills: fixer.skills ?? [],
             availability: fixer.availability ?? null,
             images: fixer.images ?? [],
-            contactName: user.name,
+            contactName: authoritativeProviderName,
             contactPhone: user.phone,
-            companyName: user.company ?? null,
+            companyName: fixer.verifiedCompanyName ?? null,
           }
         : null,
+    };
+  }
+
+  async getContactProfile(userId: string): Promise<UserContactProfile> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        fixer: {
+          select: {
+            contactPhone: true,
+            publicDisplayName: true,
+            verifiedCompanyName: true,
+            companyIdentityVerifiedAt: true,
+          },
+        },
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const name = providerDisplayName(
+      user.fixer ? { ...user.fixer, user } : { user },
+      '',
+    );
+    const email = String(user.email || '')
+      .trim()
+      .toLowerCase();
+    const phone = String(user.phone || user.fixer?.contactPhone || '').trim();
+
+    return {
+      id: user.id,
+      name,
+      legalName: String(user.name || '').trim(),
+      email,
+      phone,
+      role: String(user.role || ''),
+      companyIdentityVerified: Boolean(
+        user.fixer?.verifiedCompanyName && user.fixer.companyIdentityVerifiedAt,
+      ),
+      profileComplete: Boolean(name && email && phone),
     };
   }
 

@@ -72,6 +72,66 @@ describe('UserService', () => {
       expect(result.id).toBe('user-1');
     });
 
+    it('projects the verified company name without replacing the legal user name', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-company',
+        name: 'Bhavesh Fungprasertsuk',
+        email: 'construction_blue@hotmail.com',
+        phone: '0818544291',
+        company: 'Construction Blue',
+        role: 'FIXER',
+        addresses: [],
+        fixer: {
+          id: 'fixer-company',
+          publicDisplayName: 'Construction Blue',
+          verifiedCompanyName: 'Construction Blue',
+          companyIdentityVerifiedAt: new Date('2026-08-13T00:00:00.000Z'),
+          skills: [],
+          availability: null,
+          images: [],
+        },
+      });
+
+      const result = await service.getProfile('user-company');
+
+      expect(result).toMatchObject({
+        name: 'Bhavesh Fungprasertsuk',
+        legalName: 'Bhavesh Fungprasertsuk',
+        providerDisplayName: 'Construction Blue',
+        fixer: {
+          contactName: 'Construction Blue',
+          companyName: 'Construction Blue',
+        },
+      });
+    });
+
+    it('returns a minimal authoritative contact profile for a verified company', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-company',
+        name: 'Bhavesh Fungprasertsuk',
+        email: 'construction_blue@hotmail.com',
+        phone: null,
+        role: 'FIXER',
+        fixer: {
+          contactPhone: '0818544291',
+          publicDisplayName: 'Construction Blue',
+          verifiedCompanyName: 'Construction Blue',
+          companyIdentityVerifiedAt: new Date('2026-08-13T00:00:00.000Z'),
+        },
+      });
+
+      await expect(service.getContactProfile('user-company')).resolves.toEqual({
+        id: 'user-company',
+        name: 'Construction Blue',
+        legalName: 'Bhavesh Fungprasertsuk',
+        email: 'construction_blue@hotmail.com',
+        phone: '0818544291',
+        role: 'FIXER',
+        companyIdentityVerified: true,
+        profileComplete: true,
+      });
+    });
+
     it('should fall back to a legacy-safe profile read when live schema columns are missing', async () => {
       const driftError = new Error(
         'P2022: The column `users.company` does not exist in the current database.',

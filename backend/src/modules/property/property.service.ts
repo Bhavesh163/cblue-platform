@@ -620,6 +620,7 @@ export class PropertyService {
           phone: true,
           fixer: {
             select: {
+              contactPhone: true,
               publicDisplayName: true,
               verifiedCompanyName: true,
             },
@@ -637,7 +638,10 @@ export class PropertyService {
         userProfile.name?.trim() ||
         '';
       const contactEmail = userProfile.email?.trim().toLowerCase() || '';
-      const contactPhone = userProfile.phone?.trim() || '';
+      const contactPhone =
+        userProfile.phone?.trim() ||
+        userProfile.fixer?.contactPhone?.trim() ||
+        '';
       if (!contactName || !contactEmail || !contactPhone) {
         throw new BadRequestException(
           'Complete your name, email, and phone in your profile before listing a property.',
