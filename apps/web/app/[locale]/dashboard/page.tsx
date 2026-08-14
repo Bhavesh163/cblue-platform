@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
-import { clearSubscriberSession, ensureFreshSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { clearSubscriberSession, ensureFreshSubscriberSession, fetchWithSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
@@ -80,6 +80,7 @@ interface SubscriberInfo {
   phone: string;
   company?: string;
   status: string;
+  createdAt?: string;
 }
 
 type ServiceType = "household" | "project" | "professional" | "property";
@@ -866,6 +867,7 @@ export default function DashboardPage() {
             email: user.email || storedSubscriber?.email || "",
             phone: user.phone || storedSubscriber?.phone || "",
             status: "ACTIVE",
+            createdAt: user.createdAt || storedSubscriber?.createdAt,
           };
           if (hasFixer) subInfo.tier = user.fixer?.aiTier || user.fixer?.tier || "Standard";
           setSubscriber(subInfo);
@@ -1081,7 +1083,15 @@ export default function DashboardPage() {
         
         {/* Main Content */}
         {subscriber && !loading && (
-          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onWorkflowSnapshot={(po, snapshot) => {
+          <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onSubscriberUpdated={(profile) => {
+            setSubscriber((current) => {
+              if (!current) return current;
+              const updated = { ...current, phone: profile.phone, createdAt: profile.createdAt || current.createdAt };
+              writeCustomerDashboardSession(updated, getCustomerDashboardToken());
+              localStorage.setItem("subscriber", JSON.stringify(updated));
+              return updated;
+            });
+          }} onWorkflowSnapshot={(po, snapshot) => {
             setOrders((previous) => previous.map((order) => (
               extractPoCode(order) === po
                 ? { ...order, ...snapshot, workflowRevision: snapshot?.workflowVersion ?? order.workflowRevision }
@@ -1291,7 +1301,44 @@ function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: 
 }
 
 /* ===== PROFILE TAB ===== */
-function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }: { locale: string; prefix: string; subscriber: any; activeOrders: any[]; onOrderClick?: (o: any) => void; historyOrders: any[] }) {
+function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders, onProfileUpdated }: { locale: string; prefix: string; subscriber: any; activeOrders: any[]; onOrderClick?: (o: any) => void; historyOrders: any[]; onProfileUpdated: (profile: { phone: string; createdAt?: string }) => void }) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [phone, setPhone] = useState(String(subscriber?.phone || ""));
+    const [isSaving, setIsSaving] = useState(false);
+    const [profileMessage, setProfileMessage] = useState("");
+    const [profileError, setProfileError] = useState("");
+
+    useEffect(() => {
+      if (!isEditing) setPhone(String(subscriber?.phone || ""));
+    }, [isEditing, subscriber?.phone]);
+
+    const savePhone = async () => {
+      const nextPhone = phone.trim();
+      if (!/^[0-9\s\-+()]{9,15}$/.test(nextPhone)) {
+        setProfileError(locale === "th" ? "กรุณากรอกเบอร์โทรศัพท์ให้ถูกต้อง" : locale === "zh" ? "请输入有效的电话号码" : "Enter a valid phone number");
+        return;
+      }
+      setIsSaving(true);
+      setProfileError("");
+      setProfileMessage("");
+      try {
+        const response = await fetchWithSubscriberSession("/api/v1/users/me/phone", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: nextPhone }),
+        }, getCustomerDashboardToken());
+        if (!response?.ok) throw new Error("profile-update-failed");
+        const profile = await response.json();
+        onProfileUpdated({ phone: String(profile.phone || nextPhone), createdAt: profile.createdAt });
+        setIsEditing(false);
+        setProfileMessage(locale === "th" ? "อัปเดตเบอร์โทรศัพท์แล้ว" : locale === "zh" ? "电话号码已更新" : "Phone number updated");
+      } catch {
+        setProfileError(locale === "th" ? "ไม่สามารถอัปเดตเบอร์โทรศัพท์ได้ กรุณาลองอีกครั้ง" : locale === "zh" ? "无法更新电话号码，请重试" : "We could not update your phone number. Please try again.");
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
     return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
       <div className="flex flex-col md:flex-row gap-8 items-start">
@@ -1303,13 +1350,11 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900">{subscriber?.name || "User"}</h2>
-              <p className="text-gray-500 flex items-center gap-2 mt-1">
-                <span className="text-green-500">✓</span> {locale === "th" ? "ยืนยันตัวตนแล้ว (KYC)" : locale === "zh" ? "已验证 (KYC)" : "Verified (KYC)"}
-              </p>
+              <p className="text-gray-500 mt-1">{locale === "th" ? "บัญชีลูกค้า CBLUE" : locale === "zh" ? "CBLUE 客户账户" : "CBLUE customer account"}</p>
             </div>
             <div className="flex gap-2">
-              <button className="px-4 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 transition text-sm font-semibold">
-                {locale === "th" ? "แก้ไขโปรไฟล์" : locale === "zh" ? "编辑资料" : "Edit Profile"}
+              <button type="button" onClick={() => { setIsEditing((value) => !value); setProfileError(""); setProfileMessage(""); }} className="px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-semibold">
+                {isEditing ? (locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel") : (locale === "th" ? "แก้ไขเบอร์โทรศัพท์" : locale === "zh" ? "编辑电话号码" : "Edit phone number")}
               </button>
               <button onClick={() => {
                 if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Accept deleting your account and all data per PDPA law?")) {
@@ -1322,6 +1367,19 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
             </div>
           </div>
 
+          {isEditing && (
+            <div className="mb-6 max-w-xl rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <label htmlFor="customer-phone" className="block text-sm font-semibold text-gray-700 mb-2">{locale === "th" ? "เบอร์โทรศัพท์" : locale === "zh" ? "电话号码" : "Phone number"}</label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input id="customer-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-100" />
+                <button type="button" onClick={savePhone} disabled={isSaving} className="rounded-lg bg-sky-600 px-5 py-2 font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-gray-300">{isSaving ? (locale === "th" ? "กำลังบันทึก" : locale === "zh" ? "保存中" : "Saving") : (locale === "th" ? "บันทึก" : locale === "zh" ? "保存" : "Save")}</button>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">{locale === "th" ? "ชื่อและอีเมลของบัญชีนี้ไม่สามารถแก้ไขได้จากหน้านี้" : locale === "zh" ? "此页面无法更改账户姓名和电子邮件" : "Account name and email cannot be changed here."}</p>
+            </div>
+          )}
+          {profileError && <p className="mb-4 text-sm text-red-700" role="alert">{profileError}</p>}
+          {profileMessage && <p className="mb-4 text-sm text-green-700" role="status">{profileMessage}</p>}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-6">
             <div>
               <h3 className="text-sm font-semibold text-gray-400 mb-1">{locale === "th" ? "เบอร์โทรศัพท์" : locale === "zh" ? "电话号码" : "Phone Number"}</h3>
@@ -1333,7 +1391,7 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders }:
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-400 mb-1">{locale === "th" ? "วันที่สมัคร" : locale === "zh" ? "注册日期" : "Member Since"}</h3>
-              <p className="text-gray-900 font-medium">{fmtDate(new Date())}</p>
+              <p className="text-gray-900 font-medium">{subscriber?.createdAt ? fmtDate(subscriber.createdAt) : "-"}</p>
             </div>
           </div>
         </div>
@@ -1546,7 +1604,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
-function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFetchedOrders, onWorkflowSnapshot }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[], hasFetchedOrders?: boolean; onWorkflowSnapshot?: (po: string, snapshot: any) => void }) {
+function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFetchedOrders, onSubscriberUpdated, onWorkflowSnapshot }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[], hasFetchedOrders?: boolean; onSubscriberUpdated: (profile: { phone: string; createdAt?: string }) => void; onWorkflowSnapshot?: (po: string, snapshot: any) => void }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);
@@ -5026,7 +5084,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         ))}
       </div>
       
-      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={combinedActiveWithProp} onOrderClick={handleOrderClick} historyOrders={historyOrders} />}
+      {activeTab === "profile" && <ProfileTab locale={locale} prefix={prefix} subscriber={subscriber} activeOrders={combinedActiveWithProp} onOrderClick={handleOrderClick} historyOrders={historyOrders} onProfileUpdated={onSubscriberUpdated} />}
       
       {activeTab === "requests" && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-6 pb-6">

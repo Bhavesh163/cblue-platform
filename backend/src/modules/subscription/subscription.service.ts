@@ -154,6 +154,7 @@ export class SubscriptionService {
 
   async register(dto: CreateSubscriberDto) {
     const normalizedEmail = this.normalizeEmail(dto.email);
+    const normalizedPhone = String(dto.phone || '').trim();
     const existing = await this.findSubscriberByEmail(normalizedEmail);
     const deletedOwner = existing
       ? await this.findDeletedAccountOwner(
@@ -197,7 +198,7 @@ export class SubscriptionService {
           email: normalizedEmail,
           passwordHash,
           name: dto.name,
-          phone: dto.phone ?? '',
+          phone: normalizedPhone,
           company: dto.company,
           serviceCategory: dto.serviceCategory,
           description: dto.description,
@@ -218,12 +219,16 @@ export class SubscriptionService {
       if (user) {
         user = await tx.user.update({
           where: { id: user.id },
-          data: { subscriberId: subscriber.id },
+          data: {
+            subscriberId: subscriber.id,
+            phone: user.phone || normalizedPhone || undefined,
+          },
         });
       } else {
         user = await tx.user.create({
           data: {
             email: normalizedEmail,
+            phone: normalizedPhone || undefined,
             name: dto.name,
             company: dto.company,
             subscriberId: subscriber.id,
@@ -247,7 +252,10 @@ export class SubscriptionService {
         id: subscriber.id,
         email: subscriber.email,
         name: subscriber.name,
+        phone: subscriber.phone,
+        company: subscriber.company,
         status: subscriber.status,
+        createdAt: subscriber.createdAt,
       },
     };
   }

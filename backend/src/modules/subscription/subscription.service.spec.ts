@@ -206,6 +206,12 @@ describe('SubscriptionService', () => {
           pdpaConsentAt: expect.any(Date),
         }),
       });
+      expect(prismaService.user.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          email: 'person@example.com',
+          phone: '0812345678',
+        }),
+      });
     });
 
     it('should throw conflict error if subscriber exists', async () => {

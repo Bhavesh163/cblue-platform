@@ -8,9 +8,10 @@ import { PropertyWorkflowBridgeController } from './property-workflow-bridge.con
 import { PropertyWorkflowBridgeService } from './property-workflow-bridge.service';
 import { QualificationBridgeController } from './qualification-bridge.controller';
 import { QualificationBridgeService } from './qualification-bridge.service';
+import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [PropertyModule, PropertyInquiryModule],
+  imports: [PropertyModule, PropertyInquiryModule, UserModule],
   controllers: [
     BlueBridgeController,
     PropertyWorkflowBridgeController,

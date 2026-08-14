@@ -5,6 +5,7 @@ import {
   Headers,
   Param,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -13,13 +14,44 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { BlueBridgeService } from './blue-bridge.service';
 import { FixerWorkflowActionDto } from './dto/fixer-workflow-action.dto';
 import { FixerWorkflowBridgeService } from './fixer-workflow-bridge.service';
+import { UserService, type UserContactProfile } from '../user/user.service';
+import {
+  BlueCustomerProfileQueryDto,
+  UpdateBlueCustomerPhoneDto,
+} from './dto/customer-profile.dto';
 
 @Controller('blue')
 export class BlueBridgeController {
   constructor(
     private readonly bridge: BlueBridgeService,
     private readonly fixerWorkflow: FixerWorkflowBridgeService,
+    private readonly users: UserService,
   ) {}
+
+  @Get('customer-profile')
+  async customerProfile(
+    @Query() query: BlueCustomerProfileQueryDto,
+    @Headers('x-blue-bridge-key') bridgeKey?: string,
+  ): Promise<UserContactProfile> {
+    this.bridge.assertBridgeKey(bridgeKey);
+    const customer = await this.bridge.resolveBridgeCustomer(
+      query.legacySubjectId,
+    );
+    return this.users.getContactProfile(customer.id);
+  }
+
+  @Put('customer-profile/phone')
+  async updateCustomerPhone(
+    @Headers('x-blue-bridge-key') bridgeKey: string | undefined,
+    @Body() dto: UpdateBlueCustomerPhoneDto,
+  ): Promise<UserContactProfile> {
+    this.bridge.assertBridgeKey(bridgeKey);
+    const customer = await this.bridge.resolveBridgeCustomer(
+      dto.legacySubjectId,
+    );
+    await this.users.updateProfile(customer.id, { phone: dto.phone });
+    return this.users.getContactProfile(customer.id);
+  }
 
   @Get('workflow-activities')
   workflowActivities(
@@ -109,7 +141,11 @@ export interface BlueWorkflowDetailResponse {
   customer?: { id: string; displayName: string } | null;
   partner?: { id: string; displayName: string } | null;
   location?: string;
-  processingFee?: { amount: number; currency: string; displayLabel: string } | null;
+  processingFee?: {
+    amount: number;
+    currency: string;
+    displayLabel: string;
+  } | null;
   lifecycleStatus: string;
   archivedAt: string | null;
   cancelledAt: string | null;

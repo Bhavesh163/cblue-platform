@@ -11,6 +11,7 @@ describe('UserService', () => {
     address: Record<string, jest.Mock>;
     fixer: Record<string, jest.Mock>;
     subscriber: Record<string, jest.Mock>;
+    notification: Record<string, jest.Mock>;
     refreshSession: Record<string, jest.Mock>;
   };
 
@@ -29,8 +30,13 @@ describe('UserService', () => {
         updateMany: jest.fn(),
         delete: jest.fn(),
       },
-      fixer: { updateMany: jest.fn() },
-      subscriber: { update: jest.fn() },
+      fixer: { update: jest.fn(), updateMany: jest.fn() },
+      subscriber: {
+        findFirst: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      notification: { createMany: jest.fn() },
       refreshSession: { updateMany: jest.fn() },
     };
     prisma.$transaction.mockImplementation(
@@ -112,6 +118,7 @@ describe('UserService', () => {
         email: 'construction_blue@hotmail.com',
         phone: null,
         role: 'FIXER',
+        createdAt: new Date('2026-08-13T00:00:00.000Z'),
         fixer: {
           contactPhone: '0818544291',
           publicDisplayName: 'Construction Blue',
@@ -127,8 +134,32 @@ describe('UserService', () => {
         email: 'construction_blue@hotmail.com',
         phone: '0818544291',
         role: 'FIXER',
+        createdAt: '2026-08-13T00:00:00.000Z',
         companyIdentityVerified: true,
         profileComplete: true,
+      });
+    });
+
+    it('repairs a historical customer phone from the linked subscriber', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-customer',
+        name: 'test1',
+        email: 'test1@gmail.com',
+        phone: null,
+        role: 'USER',
+        createdAt: new Date('2026-08-14T00:00:00.000Z'),
+        addresses: [],
+        fixer: null,
+      });
+      prisma.subscriber.findFirst.mockResolvedValue({ phone: '0812345678' });
+      prisma.user.update.mockResolvedValue({ id: 'user-customer' });
+
+      const result = await service.getProfile('user-customer');
+
+      expect(result.phone).toBe('0812345678');
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-customer' },
+        data: { phone: '0812345678' },
       });
     });
 
@@ -399,16 +430,88 @@ describe('UserService', () => {
   });
 
   describe('updateProfile', () => {
-    it('should update user profile', async () => {
-      prisma.user.update.mockResolvedValue({
-        id: 'user-1',
-        name: 'Updated',
-      });
+    it('updates only the customer phone in both account records', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          email: 'customer@example.com',
+          phone: '0811111111',
+          subscriberId: 'subscriber-1',
+          fixer: null,
+        })
+        .mockResolvedValueOnce({
+          id: 'user-1',
+          name: 'Customer',
+          email: 'customer@example.com',
+          phone: '0822222222',
+          role: 'USER',
+          createdAt: new Date('2026-08-14T00:00:00.000Z'),
+          addresses: [],
+          fixer: null,
+        });
+      prisma.user.update.mockResolvedValue({ id: 'user-1' });
+      prisma.subscriber.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.updateProfile('user-1', {
-        name: 'Updated',
+        phone: '0822222222',
       });
-      expect(result.name).toBe('Updated');
+
+      expect(result.phone).toBe('0822222222');
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { phone: '0822222222' },
+      });
+      expect(prisma.subscriber.updateMany).toHaveBeenCalledWith({
+        where: { id: 'subscriber-1' },
+        data: { phone: '0822222222' },
+      });
+      expect(prisma.fixer.update).not.toHaveBeenCalled();
+    });
+
+    it('preserves partner eligibility while requiring phone re-verification', async () => {
+      prisma.user.findUnique
+        .mockResolvedValueOnce({
+          id: 'partner-1',
+          email: 'partner@example.com',
+          phone: '0811111111',
+          subscriberId: 'subscriber-2',
+          fixer: {
+            id: 'fixer-1',
+            verified: true,
+            contactPhone: '0811111111',
+            kycReverificationRequiredAt: null,
+            kycReverificationReasons: null,
+          },
+        })
+        .mockResolvedValueOnce({
+          id: 'partner-1',
+          name: 'Partner',
+          email: 'partner@example.com',
+          phone: '0833333333',
+          role: 'FIXER',
+          createdAt: new Date('2026-08-01T00:00:00.000Z'),
+          addresses: [],
+          fixer: null,
+        });
+      prisma.user.update.mockResolvedValue({ id: 'partner-1' });
+      prisma.fixer.update.mockResolvedValue({ id: 'fixer-1' });
+      prisma.subscriber.updateMany.mockResolvedValue({ count: 1 });
+      prisma.notification.createMany.mockResolvedValue({ count: 1 });
+
+      await service.updateProfile('partner-1', { phone: '0833333333' });
+
+      expect(prisma.fixer.update).toHaveBeenCalledWith({
+        where: { id: 'fixer-1' },
+        data: expect.objectContaining({
+          contactPhone: '0833333333',
+          qualificationEligibilityStatus: 'REVERIFICATION_REQUIRED',
+          kycReverificationReasons: ['PHONE_CHANGED'],
+        }),
+      });
+      expect(prisma.fixer.update.mock.calls[0][0].data).not.toHaveProperty(
+        'verified',
+      );
+      expect(prisma.notification.createMany).toHaveBeenCalledTimes(2);
     });
   });
 

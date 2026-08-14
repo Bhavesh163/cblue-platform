@@ -1,9 +1,22 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { NotificationType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
 import { providerDisplayName } from '../../common/provider-display-name';
+import { mergeReverificationReasons } from '../qualification/qualification-eligibility';
+import { queueNotificationInTransaction } from '../notification/notification.service';
+
+const normalizePhone = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .replace(/[^\d+]/g, '');
 
 export type UserContactProfile = {
   id: string;
@@ -12,6 +25,7 @@ export type UserContactProfile = {
   email: string;
   phone: string;
   role: string;
+  createdAt: string;
   companyIdentityVerified: boolean;
   profileComplete: boolean;
 };
@@ -144,7 +158,34 @@ export class UserService {
       }
     }
     if (!user) throw new NotFoundException('User not found');
-    return this.decorateProfile(user);
+    return this.decorateProfile(await this.hydrateAuthoritativePhone(user));
+  }
+
+  private async hydrateAuthoritativePhone(user: any) {
+    if (String(user.phone || '').trim()) return user;
+    const email = String(user.email || '').trim();
+    if (!email) return user;
+
+    const subscriber = await this.prisma.subscriber.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { phone: true },
+    });
+    const phone = String(subscriber?.phone || '').trim();
+    if (!phone) return user;
+
+    try {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { phone },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Customer phone read repair could not persist for user ${user.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    return { ...user, phone };
   }
 
   private async getProfileLegacySafe(userId: string) {
@@ -370,24 +411,31 @@ export class UserService {
     });
     if (!user) throw new NotFoundException('User not found');
 
+    const hydratedUser = await this.hydrateAuthoritativePhone(user);
     const name = providerDisplayName(
-      user.fixer ? { ...user.fixer, user } : { user },
+      hydratedUser.fixer
+        ? { ...hydratedUser.fixer, user: hydratedUser }
+        : { user: hydratedUser },
       '',
     );
-    const email = String(user.email || '')
+    const email = String(hydratedUser.email || '')
       .trim()
       .toLowerCase();
-    const phone = String(user.phone || user.fixer?.contactPhone || '').trim();
+    const phone = String(
+      hydratedUser.phone || hydratedUser.fixer?.contactPhone || '',
+    ).trim();
 
     return {
-      id: user.id,
+      id: hydratedUser.id,
       name,
-      legalName: String(user.name || '').trim(),
+      legalName: String(hydratedUser.name || '').trim(),
       email,
       phone,
-      role: String(user.role || ''),
+      role: String(hydratedUser.role || ''),
+      createdAt: hydratedUser.createdAt.toISOString(),
       companyIdentityVerified: Boolean(
-        user.fixer?.verifiedCompanyName && user.fixer.companyIdentityVerifiedAt,
+        hydratedUser.fixer?.verifiedCompanyName &&
+        hydratedUser.fixer.companyIdentityVerifiedAt,
       ),
       profileComplete: Boolean(name && email && phone),
     };
@@ -407,10 +455,109 @@ export class UserService {
   }
 
   async updateProfile(userId: string, dto: UpdateUserDto) {
-    return this.prisma.user.update({
+    const phone = String(dto.phone || '').trim();
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      data: dto,
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        subscriberId: true,
+        fixer: {
+          select: {
+            id: true,
+            verified: true,
+            contactPhone: true,
+            kycReverificationRequiredAt: true,
+            kycReverificationReasons: true,
+          },
+        },
+      },
     });
+    if (!user) throw new NotFoundException('User not found');
+
+    const changed =
+      normalizePhone(user.fixer?.contactPhone || user.phone) !==
+      normalizePhone(phone);
+    const requiresReverification = Boolean(user.fixer?.verified && changed);
+    const newlyRequiresReverification = Boolean(
+      requiresReverification && !user.fixer?.kycReverificationRequiredAt,
+    );
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: { phone },
+        });
+        await tx.subscriber.updateMany({
+          where: user.subscriberId
+            ? { id: user.subscriberId }
+            : {
+                email: {
+                  equals: String(user.email || ''),
+                  mode: 'insensitive',
+                },
+              },
+          data: { phone },
+        });
+
+        if (user.fixer && changed) {
+          await tx.fixer.update({
+            where: { id: user.fixer.id },
+            data: {
+              contactPhone: phone,
+              ...(requiresReverification
+                ? {
+                    qualificationEligibilityStatus:
+                      'REVERIFICATION_REQUIRED' as const,
+                    kycReverificationRequiredAt:
+                      user.fixer.kycReverificationRequiredAt ?? new Date(),
+                    kycReverificationReasons: mergeReverificationReasons(
+                      user.fixer.kycReverificationReasons,
+                      ['PHONE_CHANGED'],
+                    ),
+                    kycExpiryWarningSentAt: null,
+                  }
+                : {}),
+            },
+          });
+        }
+
+        if (newlyRequiresReverification && user.fixer) {
+          const notification = {
+            userId,
+            title: 'Profile verification update required',
+            body: 'Your approved profile remains eligible for new opportunities while you submit the requested identity update.',
+            data: {
+              fixerId: user.fixer.id,
+              eligibilityStatus: 'REVERIFICATION_REQUIRED',
+              reasons: ['PHONE_CHANGED'],
+            },
+          };
+          await queueNotificationInTransaction(tx, {
+            ...notification,
+            type: NotificationType.IN_APP,
+            dedupeKey: `customer-phone-reverification-in-app:${user.fixer.id}`,
+          });
+          await queueNotificationInTransaction(tx, {
+            ...notification,
+            type: NotificationType.EMAIL,
+            dedupeKey: `customer-phone-reverification-email:${user.fixer.id}`,
+          });
+        }
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Phone number is already in use');
+      }
+      throw error;
+    }
+
+    return this.getProfile(userId);
   }
 
   // ── Address management ──

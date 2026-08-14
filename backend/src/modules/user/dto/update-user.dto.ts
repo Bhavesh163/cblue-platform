@@ -1,15 +1,7 @@
-import { IsString, IsOptional, IsEmail } from 'class-validator';
+import { IsString, Matches } from 'class-validator';
 
 export class UpdateUserDto {
-  @IsOptional()
   @IsString()
-  name?: string;
-
-  @IsOptional()
-  @IsEmail()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  company?: string;
+  @Matches(/^[0-9\s\-+()]{9,15}$/)
+  phone: string;
 }

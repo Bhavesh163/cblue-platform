@@ -37,6 +37,11 @@ export class UserController {
     return this.userService.updateProfile(userId, dto);
   }
 
+  @Put('me/phone')
+  updatePhone(@CurrentUser('id') userId: string, @Body() dto: UpdateUserDto) {
+    return this.userService.updateProfile(userId, dto);
+  }
+
   // ── Addresses ──
 
   @Get('me/addresses')
