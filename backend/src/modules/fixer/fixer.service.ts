@@ -1377,87 +1377,89 @@ export class FixerService {
     const newlyRequiresReverification =
       reverificationRequired && !fixer.kycReverificationRequiredAt;
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        name: dto.name,
-        email: dto.email,
-        company: dto.company,
-        role: existingUser.role === 'ADMIN' ? 'ADMIN' : 'FIXER',
-      },
-    });
-
     const tierEvaluation = await this.evaluateFixerTier(
       dto as RegisterFixerWithEvidence,
     );
 
-    const updatedFixer = await this.prisma.fixer.update({
-      where: { id: fixer.id },
-      data: {
-        bio: dto.bio,
-        description: dto.description,
-        pastExperience: dto.pastExperience,
-        pastProjectType: dto.pastProjectType,
-        yearsExperience: dto.yearsExperience,
-        travelRadius: dto.travelRadius,
-        availableStartDate: dto.scheduledDate,
-        contactPhone: dto.phone,
-        companyAddress: dto.companyAddress
-          ? (JSON.parse(
-              JSON.stringify(dto.companyAddress),
-            ) as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        priceList: dto.priceList
-          ? (JSON.parse(JSON.stringify(dto.priceList)) as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-        serviceProvince: serviceLocation.province,
-        serviceDistrict: serviceLocation.district,
-        serviceSubdistrict: serviceLocation.subdistrict,
-        servicePostalCode: serviceLocation.postalCode,
-        gpsLat: dto.gpsCoords?.lat,
-        gpsLng: dto.gpsCoords?.lng,
-        aiScore: tierEvaluation.score,
-        aiTier: tierEvaluation.tier,
-        aiBreakdown: JSON.parse(
-          JSON.stringify(tierEvaluation.breakdown),
-        ) as Prisma.InputJsonValue,
-        aiFlags: JSON.parse(
-          JSON.stringify(tierEvaluation.flags),
-        ) as Prisma.InputJsonValue,
-        aiCredentialStatus: tierEvaluation.credentialStatus,
-        ...(reverificationRequired
-          ? {
-              qualificationEligibilityStatus:
-                'REVERIFICATION_REQUIRED' as const,
-              kycReverificationRequiredAt:
-                fixer.kycReverificationRequiredAt ?? new Date(),
-              kycReverificationReasons: mergeReverificationReasons(
-                fixer.kycReverificationReasons,
-                reasons,
-              ),
-              kycExpiryWarningSentAt: null,
-            }
-          : {}),
-      },
-    });
-
-    await this.prisma.fixerSkill.deleteMany({
-      where: { fixerId: fixer.id },
-    });
-
-    if (dto.skills && dto.skills.length > 0) {
-      await this.prisma.fixerSkill.createMany({
-        data: dto.skills.map((skill) => ({
-          fixerId: fixer.id,
-          category: skill.category,
-          name: skill.name,
-        })),
-        skipDuplicates: true,
+    return this.prisma.$transaction(async (transaction) => {
+      await transaction.user.update({
+        where: { id: userId },
+        data: {
+          name: dto.name,
+          email: dto.email,
+          company: dto.company,
+          role: existingUser.role === 'ADMIN' ? 'ADMIN' : 'FIXER',
+        },
       });
-    }
 
-    if (newlyRequiresReverification) {
-      await this.prisma.$transaction(async (tx) => {
+      const updatedFixer = await transaction.fixer.update({
+        where: { id: fixer.id },
+        data: {
+          bio: dto.bio,
+          description: dto.description,
+          pastExperience: dto.pastExperience,
+          pastProjectType: dto.pastProjectType,
+          yearsExperience: dto.yearsExperience,
+          travelRadius: dto.travelRadius,
+          availableStartDate: dto.scheduledDate,
+          contactPhone: dto.phone,
+          companyAddress: dto.companyAddress
+            ? (JSON.parse(
+                JSON.stringify(dto.companyAddress),
+              ) as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+          priceList: dto.priceList
+            ? (JSON.parse(
+                JSON.stringify(dto.priceList),
+              ) as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+          serviceProvince: serviceLocation.province,
+          serviceDistrict: serviceLocation.district,
+          serviceSubdistrict: serviceLocation.subdistrict,
+          servicePostalCode: serviceLocation.postalCode,
+          gpsLat: dto.gpsCoords?.lat,
+          gpsLng: dto.gpsCoords?.lng,
+          aiScore: tierEvaluation.score,
+          aiTier: tierEvaluation.tier,
+          aiBreakdown: JSON.parse(
+            JSON.stringify(tierEvaluation.breakdown),
+          ) as Prisma.InputJsonValue,
+          aiFlags: JSON.parse(
+            JSON.stringify(tierEvaluation.flags),
+          ) as Prisma.InputJsonValue,
+          aiCredentialStatus: tierEvaluation.credentialStatus,
+          ...(reverificationRequired
+            ? {
+                qualificationEligibilityStatus:
+                  'REVERIFICATION_REQUIRED' as const,
+                kycReverificationRequiredAt:
+                  fixer.kycReverificationRequiredAt ?? new Date(),
+                kycReverificationReasons: mergeReverificationReasons(
+                  fixer.kycReverificationReasons,
+                  reasons,
+                ),
+                kycExpiryWarningSentAt: null,
+              }
+            : {}),
+        },
+      });
+
+      await transaction.fixerSkill.deleteMany({
+        where: { fixerId: fixer.id },
+      });
+
+      if (dto.skills && dto.skills.length > 0) {
+        await transaction.fixerSkill.createMany({
+          data: dto.skills.map((skill) => ({
+            fixerId: fixer.id,
+            category: skill.category,
+            name: skill.name,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      if (newlyRequiresReverification) {
         const notification = {
           userId,
           title: 'Profile verification update required',
@@ -1468,22 +1470,22 @@ export class FixerService {
             reasons,
           },
         };
-        await queueNotificationInTransaction(tx, {
+        await queueNotificationInTransaction(transaction, {
           ...notification,
           type: NotificationType.IN_APP,
           dedupeKey: 'fixer-reverification-in-app:' + fixer.id,
         });
-        await queueNotificationInTransaction(tx, {
+        await queueNotificationInTransaction(transaction, {
           ...notification,
           type: NotificationType.EMAIL,
           dedupeKey: 'fixer-reverification-email:' + fixer.id,
         });
-      });
-    }
+      }
 
-    return this.prisma.fixer.findUnique({
-      where: { id: updatedFixer.id },
-      include: { user: true, skills: true, availability: true },
+      return transaction.fixer.findUnique({
+        where: { id: updatedFixer.id },
+        include: { user: true, skills: true, availability: true },
+      });
     });
   }
 

@@ -2459,6 +2459,76 @@ describe('QualificationService', () => {
     });
   });
 
+  it('requires company evidence when the persisted profile claims a company', async () => {
+    tx.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      status: 'DRAFT',
+      fixer: {
+        verifiedCompanyName: null,
+        user: { company: 'Construction Blue Co., Ltd.' },
+      },
+      documents: [
+        {
+          id: 'id-front-document',
+          documentType: 'id-front',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+        {
+          id: 'selfie-document',
+          documentType: 'selfie-with-id',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+      ],
+    });
+
+    await expect(
+      service.submitForUser('user-1', 'submission-1'),
+    ).rejects.toThrow(
+      'Missing required KYC evidence: company-affidavit, company-letter-of-intent',
+    );
+    expect(routing.routeSubmission).not.toHaveBeenCalled();
+  });
+
+  it('keeps company evidence optional for a personal profile', async () => {
+    tx.kycSubmission.findFirst.mockResolvedValue({
+      id: 'submission-1',
+      status: 'DRAFT',
+      fixer: { verifiedCompanyName: null, user: { company: null } },
+      documents: [
+        {
+          id: 'id-front-document',
+          documentType: 'id-front',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+        {
+          id: 'selfie-document',
+          documentType: 'selfie-with-id',
+          sizeBytes: 100,
+          contentType: 'image/jpeg',
+          isActive: true,
+          lifecycleState: 'READY',
+        },
+      ],
+    });
+
+    await expect(
+      service.submitForUser('user-1', 'submission-1'),
+    ).resolves.toEqual(expect.objectContaining({ status: 'NEEDS_REVIEW' }));
+    expect(routing.routeSubmission).toHaveBeenCalledWith(
+      'submission-1',
+      'user-1',
+    );
+  });
+
   it('queues both company documents atomically when the applicant submits', async () => {
     tx.kycSubmission.findFirst.mockResolvedValue({
       id: 'submission-1',

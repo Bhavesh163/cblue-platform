@@ -1971,7 +1971,12 @@ export class QualificationService {
         const submission = await tx.kycSubmission.findFirst({
           where: { id: submissionId, fixer: { userId } },
           include: {
-            fixer: { select: { verifiedCompanyName: true } },
+            fixer: {
+              select: {
+                verifiedCompanyName: true,
+                user: { select: { company: true } },
+              },
+            },
             documents: {
               select: {
                 documentType: true,
@@ -2002,6 +2007,7 @@ export class QualificationService {
         );
         const companyEvidenceRequested = Boolean(
           submission.fixer?.verifiedCompanyName ||
+          submission.fixer?.user?.company?.trim() ||
           documentTypes.has('company-affidavit') ||
           documentTypes.has('company-letter-of-intent'),
         );

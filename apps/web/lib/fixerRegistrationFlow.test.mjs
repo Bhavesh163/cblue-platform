@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isCompanyQualificationApplication,
   isQualificationReviewInProgress,
   requiresQualificationContinuation,
+  shouldShowExistingFixerNotice,
   shouldUploadKycImmediately,
 } from "./fixerRegistrationFlow.js";
 
@@ -62,5 +64,52 @@ test("submitted qualification remains under review instead of opening another dr
   assert.equal(
     requiresQualificationContinuation("REVERIFICATION_REQUIRED", "ASSESSING"),
     false,
+  );
+});
+
+test("company qualification is required from claimed or verified company identity", () => {
+  assert.equal(
+    isCompanyQualificationApplication({
+      claimedCompanyName: "Construction Blue Co., Ltd.",
+      companyPartner: false,
+    }),
+    true,
+  );
+  assert.equal(
+    isCompanyQualificationApplication({
+      claimedCompanyName: "",
+      companyPartner: true,
+    }),
+    true,
+  );
+  assert.equal(
+    isCompanyQualificationApplication({
+      claimedCompanyName: "   ",
+      companyPartner: false,
+    }),
+    false,
+  );
+});
+
+test("an in-flight registration never renders the existing-fixer completion notice", () => {
+  const base = {
+    isAlreadyFixer: true,
+    isEditMode: false,
+    qualificationNeedsContinuation: false,
+    submissionSucceeded: false,
+  };
+  assert.equal(
+    shouldShowExistingFixerNotice({
+      ...base,
+      submissionInFlight: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldShowExistingFixerNotice({
+      ...base,
+      submissionInFlight: false,
+    }),
+    true,
   );
 });

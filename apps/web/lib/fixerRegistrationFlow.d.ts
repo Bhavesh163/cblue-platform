@@ -21,3 +21,16 @@ export declare function shouldUploadKycImmediately(input: {
   isRegisteredFixer: boolean;
   hasAccessToken: boolean;
 }): boolean;
+
+export declare function isCompanyQualificationApplication(input: {
+  claimedCompanyName: string | null | undefined;
+  companyPartner: boolean | null | undefined;
+}): boolean;
+
+export declare function shouldShowExistingFixerNotice(input: {
+  isAlreadyFixer: boolean;
+  isEditMode: boolean;
+  qualificationNeedsContinuation: boolean;
+  submissionInFlight: boolean;
+  submissionSucceeded: boolean;
+}): boolean;

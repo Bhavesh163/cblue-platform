@@ -3793,6 +3793,7 @@ describe('FixerService', () => {
         }),
       }),
     );
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a verified partner eligible after a price-list-only profile update', async () => {
@@ -3881,5 +3882,51 @@ describe('FixerService', () => {
     expect(prisma.fixer.update.mock.calls.at(-1)?.[0].data.contactPhone).toBe(
       '081-985-2846',
     );
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not partially update identity data when tier evaluation fails', async () => {
+    prisma.fixer.findUnique.mockResolvedValue({
+      id: 'fixer-1',
+      verified: true,
+      companyAddress: null,
+      serviceProvince: 'กรุงเทพมหานคร',
+      serviceDistrict: 'วัฒนา',
+      serviceSubdistrict: 'คลองเตยเหนือ',
+      servicePostalCode: '10110',
+      travelRadius: 10,
+      gpsLat: null,
+      gpsLng: null,
+      kycReverificationRequiredAt: null,
+      kycReverificationReasons: null,
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'partner@example.com',
+      phone: '0811111111',
+      role: 'FIXER',
+    });
+    jest
+      .spyOn(service as any, 'evaluateFixerTier')
+      .mockRejectedValue(new Error('Evaluation unavailable'));
+
+    await expect(
+      service.updateMyFixerProfile('user-1', {
+        name: 'Partner',
+        email: 'partner@example.com',
+        phone: '0811111111',
+        travelRadius: 10,
+        address: {
+          province: 'กรุงเทพมหานคร',
+          district: 'วัฒนา',
+          subdistrict: 'คลองเตยเหนือ',
+          postalCode: '10110',
+        },
+        skills: [],
+      } as never),
+    ).rejects.toThrow('Evaluation unavailable');
+
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(prisma.fixer.update).not.toHaveBeenCalled();
   });
 });

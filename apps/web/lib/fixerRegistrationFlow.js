@@ -34,3 +34,26 @@ export function shouldUploadKycImmediately({
 }) {
   return Boolean(isRegisteredFixer && hasAccessToken);
 }
+
+export function isCompanyQualificationApplication({
+  claimedCompanyName,
+  companyPartner,
+}) {
+  return Boolean(String(claimedCompanyName || "").trim() || companyPartner);
+}
+
+export function shouldShowExistingFixerNotice({
+  isAlreadyFixer,
+  isEditMode,
+  qualificationNeedsContinuation,
+  submissionInFlight,
+  submissionSucceeded,
+}) {
+  return Boolean(
+    isAlreadyFixer &&
+    !isEditMode &&
+    !qualificationNeedsContinuation &&
+    !submissionInFlight &&
+    !submissionSucceeded,
+  );
+}

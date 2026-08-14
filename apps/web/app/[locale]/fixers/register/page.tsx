@@ -37,8 +37,10 @@ import {
   PORTFOLIO_MAX_FILE_BYTES,
 } from "../../lib/portfolio-image-compression";
 import {
+  isCompanyQualificationApplication,
   isQualificationReviewInProgress,
   requiresQualificationContinuation,
+  shouldShowExistingFixerNotice,
   shouldUploadKycImmediately,
 } from "../../../../lib/fixerRegistrationFlow";
 import {
@@ -374,7 +376,12 @@ function companyEvidenceUploadError(
       );
     }
     if (isTemporarilyUnavailable) {
-      return label + "\uff08" + fileName + "\uff09\u6682\u65f6\u65e0\u6cd5\u4fdd\u5b58\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002";
+      return (
+        label +
+        "\uff08" +
+        fileName +
+        "\uff09\u6682\u65f6\u65e0\u6cd5\u4fdd\u5b58\uff0c\u8bf7\u7a0d\u540e\u518d\u8bd5\u3002"
+      );
     }
     return "无法保存" + label + "（" + fileName + "），请重新提交此文件。";
   }
@@ -555,6 +562,52 @@ function applicantQualificationStatus(status: string | undefined) {
   return "Under review";
 }
 
+type SubmissionStage =
+  | "idle"
+  | "saving-profile"
+  | "checking-status"
+  | "securing-documents"
+  | "submitting-review";
+
+function applicantSubmissionProgress(
+  stage: SubmissionStage,
+  locale: string,
+  isEditMode: boolean,
+): string {
+  const messages: Record<
+    ApplicantLocale,
+    Record<Exclude<SubmissionStage, "idle">, string>
+  > = {
+    en: {
+      "saving-profile": isEditMode
+        ? "Saving your profile changes"
+        : "Creating your partner profile",
+      "checking-status": "Confirming your application status",
+      "securing-documents": "Securing your documents",
+      "submitting-review": "Submitting your information for review",
+    },
+    th: {
+      "saving-profile": isEditMode
+        ? "กำลังบันทึกการแก้ไขโปรไฟล์"
+        : "กำลังสร้างโปรไฟล์พาร์ทเนอร์",
+      "checking-status": "กำลังยืนยันสถานะใบสมัคร",
+      "securing-documents": "กำลังจัดเก็บเอกสารอย่างปลอดภัย",
+      "submitting-review": "กำลังส่งข้อมูลเพื่อพิจารณา",
+    },
+    zh: {
+      "saving-profile": isEditMode
+        ? "正在保存资料更改"
+        : "正在创建合作伙伴资料",
+      "checking-status": "正在确认申请状态",
+      "securing-documents": "正在安全保存文件",
+      "submitting-review": "正在提交资料以供审核",
+    },
+  };
+  const language: ApplicantLocale =
+    locale === "th" || locale === "zh" ? locale : "en";
+  return stage === "idle" ? "" : messages[language][stage];
+}
+
 function FixerRegisterContent() {
   const t = useTranslations("fixer");
   const locale = useLocale();
@@ -562,9 +615,7 @@ function FixerRegisterContent() {
   const isEditMode = searchParams.get("edit") === "1";
   const [form, setForm] = useState<FormData>(initialForm);
   const [kycSlots, setKycSlots] = useState<PersistedEvidenceSlot[]>([]);
-  const [qualificationDraftId, setQualificationDraftId] = useState<
-    string | null
-  >(null);
+  const qualificationDraftIdRef = useRef<string | null>(null);
   const [portfolioImages, setPortfolioImages] = useState<File[]>([]);
   const [companyAffidavit, setCompanyAffidavit] = useState<File | null>(null);
   const [companyLetterOfIntent, setCompanyLetterOfIntent] =
@@ -593,6 +644,19 @@ function FixerRegisterContent() {
     { service: "", quantity: "", unit: "", finalPrice: "" },
   ]);
   const [submitting, setSubmitting] = useState(false);
+  const submissionInFlightRef = useRef(false);
+  const [submissionStage, setSubmissionStage] =
+    useState<SubmissionStage>("idle");
+  useEffect(() => {
+    if (!submitting) return;
+    const preventAccidentalNavigation = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventAccidentalNavigation);
+    return () =>
+      window.removeEventListener("beforeunload", preventAccidentalNavigation);
+  }, [submitting]);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -618,6 +682,10 @@ function FixerRegisterContent() {
   const prefix = `/${locale}`;
 
   const [scheduledDateInput, setScheduledDateInput] = useState("");
+
+  const rememberQualificationDraft = useCallback((draftId: string) => {
+    qualificationDraftIdRef.current = draftId;
+  }, []);
 
   const populateFixerForm = useCallback((user: any, fixer: any) => {
     const primaryAddress =
@@ -869,7 +937,7 @@ function FixerRegisterContent() {
                 assessmentReasonCodes?: string[];
               }>;
             };
-            if (draft.id) setQualificationDraftId(draft.id);
+            if (draft.id) rememberQualificationDraft(draft.id);
             const persisted = (draft.documents || [])
               .filter(
                 (document) =>
@@ -900,7 +968,7 @@ function FixerRegisterContent() {
       setCheckingStatus(false);
     }
     checkFixer();
-  }, [isEditMode, locale, populateFixerForm]);
+  }, [isEditMode, locale, populateFixerForm, rememberQualificationDraft]);
 
   const addPortfolioImages = useCallback(
     async (incoming: File[]) => {
@@ -1257,7 +1325,7 @@ function FixerRegisterContent() {
         throw new Error("Please sign in before uploading identity photos.");
       }
       try {
-        let draftId = qualificationDraftId;
+        let draftId = qualificationDraftIdRef.current;
         if (!draftId) {
           const draftResponse = await authenticatedSubscriberRequest(
             "/api/v1/qualification/submissions/draft",
@@ -1280,7 +1348,7 @@ function FixerRegisterContent() {
           if (!draftId) {
             throw new Error("We could not start your secure verification.");
           }
-          setQualificationDraftId(draftId);
+          rememberQualificationDraft(draftId);
         }
         const body = new globalThis.FormData();
         body.append("documentType", documentType);
@@ -1310,7 +1378,7 @@ function FixerRegisterContent() {
           : new Error("We could not receive this file. Please try again.");
       }
     },
-    [qualificationDraftId],
+    [rememberQualificationDraft],
   );
 
   const preflightKyc = useCallback(
@@ -1703,6 +1771,18 @@ function FixerRegisterContent() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (submissionInFlightRef.current) return;
+    submissionInFlightRef.current = true;
+    try {
+      await submitFixerApplication();
+    } finally {
+      submissionInFlightRef.current = false;
+      setSubmitting(false);
+      setSubmissionStage("idle");
+    }
+  }
+
+  async function submitFixerApplication() {
     const authenticatedToken = await ensureInlineAuthentication();
     if (!authenticatedToken) return;
     if (!form.consent) {
@@ -1803,6 +1883,7 @@ function FixerRegisterContent() {
       return;
     }
     setSubmitting(true);
+    setSubmissionStage("saving-profile");
     setError("");
 
     try {
@@ -1914,7 +1995,7 @@ function FixerRegisterContent() {
 
       const wasRegisteredFixer = isRegisteredFixer;
       setIsRegisteredFixer(true);
-      setIsAlreadyFixer(true);
+      setSubmissionStage("checking-status");
 
       const statusAfterProfile = await authenticatedSubscriberRequest(
         "/api/v1/qualification/status",
@@ -1942,6 +2023,7 @@ function FixerRegisterContent() {
         );
       if (!requiresKyc) {
         if (portfolioImages.length > 0) {
+          setSubmissionStage("securing-documents");
           const targetResponse = await authenticatedSubscriberRequest(
             "/api/v1/qualification/tier-review-target",
             {
@@ -1993,7 +2075,10 @@ function FixerRegisterContent() {
         );
       }
       if (
-        eligibility?.companyPartner &&
+        isCompanyQualificationApplication({
+          claimedCompanyName: form.company,
+          companyPartner: eligibility?.companyPartner,
+        }) &&
         (!companyAffidavit || !companyLetterOfIntent)
       ) {
         throw new Error(
@@ -2005,6 +2090,7 @@ function FixerRegisterContent() {
         );
       }
 
+      setSubmissionStage("securing-documents");
       const createQualification = await authenticatedSubscriberRequest(
         "/api/v1/qualification/submissions/draft",
         {
@@ -2027,7 +2113,7 @@ function FixerRegisterContent() {
       const qualification = (await createQualification.json()) as {
         id: string;
       };
-      setQualificationDraftId(qualification.id);
+      rememberQualificationDraft(qualification.id);
       const uploadEvidence = async (
         documentType: string,
         file: File,
@@ -2130,6 +2216,7 @@ function FixerRegisterContent() {
         await uploadEvidence("portfolio", portfolioImage);
       }
 
+      setSubmissionStage("submitting-review");
       const finalizeQualification = await authenticatedSubscriberRequest(
         `/api/v1/qualification/submissions/${qualification.id}/submit`,
         {
@@ -2169,14 +2256,36 @@ function FixerRegisterContent() {
                 ? "无法连接服务器"
                 : "Cannot connect to server",
       );
-    } finally {
-      setSubmitting(false);
     }
   }
 
   const qualificationNeedsContinuation = requiresQualificationContinuation(
     qualificationEligibility?.status,
     qualificationSubmissionStatus,
+  );
+  const companyQualificationApplication = isCompanyQualificationApplication({
+    claimedCompanyName: form.company,
+    companyPartner: qualificationEligibility?.companyPartner,
+  });
+  const showExistingFixerNotice = shouldShowExistingFixerNotice({
+    isAlreadyFixer,
+    isEditMode,
+    qualificationNeedsContinuation,
+    submissionInFlight: submissionInFlightRef.current || submitting,
+    submissionSucceeded: success,
+  });
+  const submitAvailable = Boolean(
+    !submitting &&
+    !portfolioProcessing &&
+    !companyEvidenceProcessing &&
+    !kycValidating &&
+    form.consent &&
+    recaptchaToken,
+  );
+  const submissionProgress = applicantSubmissionProgress(
+    submissionStage,
+    locale,
+    isEditMode,
   );
   if (!mounted || checkingStatus)
     return (
@@ -2185,12 +2294,7 @@ function FixerRegisterContent() {
       </div>
     );
 
-  if (
-    isAlreadyFixer &&
-    !success &&
-    !isEditMode &&
-    !qualificationNeedsContinuation
-  ) {
+  if (showExistingFixerNotice) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 max-w-lg text-center">
@@ -2335,11 +2439,34 @@ function FixerRegisterContent() {
 
         <form
           onSubmit={handleSubmit}
+          aria-busy={submitting}
           className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 space-y-6"
         >
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
+            </div>
+          )}
+          {submitting && submissionProgress && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-950"
+            >
+              <span
+                aria-hidden="true"
+                className="mt-0.5 h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-sky-700 border-t-transparent"
+              />
+              <div className="min-w-0">
+                <p className="font-semibold">{submissionProgress}</p>
+                <p className="mt-1 text-sm leading-6 text-sky-900">
+                  {locale === "th"
+                    ? "กรุณาเปิดหน้านี้ไว้ ระบบจะยืนยันเมื่อได้รับข้อมูลครบถ้วน"
+                    : locale === "zh"
+                      ? "请保持此页面打开。资料接收完整后，系统会显示确认信息。"
+                      : "Keep this page open. Confirmation will appear when all information has been received."}
+                </p>
+              </div>
             </div>
           )}
 
@@ -2784,7 +2911,11 @@ function FixerRegisterContent() {
                       locale={locale}
                       value={form.password}
                       onChange={handleChange}
-                      autoComplete={authMode === "login" ? "current-password" : "new-password"}
+                      autoComplete={
+                        authMode === "login"
+                          ? "current-password"
+                          : "new-password"
+                      }
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none"
                       placeholder="••••••••"
                     />
@@ -2857,7 +2988,7 @@ function FixerRegisterContent() {
                         : "Identity verification update required"}
                 </p>
                 <p className="mt-1 leading-6">
-                  {qualificationEligibility.companyPartner
+                  {companyQualificationApplication
                     ? locale === "th"
                       ? "กรุณาส่งรูปด้านหน้าบัตร เซลฟี่คู่บัตร หนังสือรับรองบริษัท และหนังสือแสดงเจตจำนงของกรรมการฉบับใหม่ เพื่อรับโอกาสงานใหม่อย่างต่อเนื่อง"
                       : locale === "zh"
@@ -4118,9 +4249,9 @@ function FixerRegisterContent() {
 
             <button
               type="submit"
-              disabled={submitting || !form.consent || !recaptchaToken}
+              disabled={!submitAvailable}
               className={`w-full py-3 px-6 text-base font-semibold rounded-xl transition-colors ${
-                form.consent && recaptchaToken
+                submitAvailable
                   ? "text-white bg-blue-700 hover:bg-blue-800"
                   : "text-gray-400 bg-gray-200 cursor-not-allowed"
               }`}
