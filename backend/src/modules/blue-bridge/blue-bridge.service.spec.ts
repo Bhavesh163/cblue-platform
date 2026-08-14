@@ -1,8 +1,49 @@
 import { ConfigService } from '@nestjs/config';
+import { UnauthorizedException } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BlueBridgeService } from './blue-bridge.service';
 
 describe('BlueBridgeService', () => {
+  it.each([UserRole.USER, UserRole.FIXER])(
+    'authorizes an active %s account to act as a property customer',
+    async (role) => {
+      const customer = {
+        id: 'customer-account',
+        name: 'Customer Account',
+        email: 'customer@example.com',
+        role,
+      };
+      const prisma = {
+        user: { findFirst: jest.fn().mockResolvedValue(customer) },
+      } as unknown as PrismaService;
+      const service = new BlueBridgeService(prisma, new ConfigService());
+
+      await expect(
+        service.resolveAuthenticatedCustomer(customer.id),
+      ).resolves.toEqual(customer);
+      expect(prisma.user.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: customer.id,
+          role: { in: [UserRole.USER, UserRole.FIXER] },
+          isActive: true,
+        },
+        select: { id: true, name: true, email: true, role: true },
+      });
+    },
+  );
+
+  it('rejects an account that is not an active marketplace customer', async () => {
+    const prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+    const service = new BlueBridgeService(prisma, new ConfigService());
+
+    await expect(
+      service.resolveAuthenticatedCustomer('admin-or-inactive'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('returns the exact persisted step-2 budget without parsing PO digits', async () => {
     const prisma = {
       subscriber: {

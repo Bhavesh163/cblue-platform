@@ -80,6 +80,8 @@ interface ProcessingFee {
   currency: string;
   displayLabel: string;
 }
+
+const CUSTOMER_ACCOUNT_ROLES: UserRole[] = [UserRole.USER, UserRole.FIXER];
 interface OrderWorkflowSnapshot {
   poNumber: string;
   currentStep: number;
@@ -776,7 +778,7 @@ export class BlueBridgeService {
     const customer = await this.prisma.user.findFirst({
       where: {
         id: { in: linkedUserIds },
-        role: UserRole.USER,
+        role: { in: CUSTOMER_ACCOUNT_ROLES },
         isActive: true,
       },
       select: { id: true, name: true, email: true, role: true },
@@ -789,7 +791,11 @@ export class BlueBridgeService {
 
   async resolveAuthenticatedCustomer(userId: string) {
     const customer = await this.prisma.user.findFirst({
-      where: { id: userId, role: UserRole.USER, isActive: true },
+      where: {
+        id: userId,
+        role: { in: CUSTOMER_ACCOUNT_ROLES },
+        isActive: true,
+      },
       select: { id: true, name: true, email: true, role: true },
     });
     if (!customer) {

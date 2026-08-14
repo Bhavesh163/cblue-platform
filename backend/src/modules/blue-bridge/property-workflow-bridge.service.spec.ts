@@ -1,4 +1,4 @@
-import { PropertyInquiryStatus } from '@prisma/client';
+import { PropertyInquiryStatus, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PropertyService } from '../property/property.service';
 import { PropertyWorkflowBridgeService } from './property-workflow-bridge.service';
@@ -142,6 +142,8 @@ describe('PropertyWorkflowBridgeService', () => {
           id: 'customer-1',
           name: 'Customer',
           email: 'customer@example.com',
+          role: UserRole.USER,
+          isActive: true,
         }),
       },
       property: { findFirst: jest.fn().mockResolvedValue(property) },
@@ -231,6 +233,45 @@ describe('PropertyWorkflowBridgeService', () => {
       name: 'Anonymous',
       email: null,
     });
+  });
+
+  it('rejects inquiry reads and actions from users who own neither side', async () => {
+    const stored = inquiry(PropertyInquiryStatus.ACCEPTED);
+    const prisma = {
+      propertyInquiry: { findUnique: jest.fn().mockResolvedValue(stored) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    await expect(
+      service.snapshot(stored.poNumber, 'unrelated-user'),
+    ).rejects.toThrow('Not authorized for this inquiry');
+    await expect(
+      service.action(stored.poNumber, 'unrelated-user', 'fee', {}),
+    ).rejects.toThrow('Not authorized for this inquiry');
+  });
+
+  it('rejects a property lister attempting to inquire about their own listing', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: property.userId,
+          name: 'Lister',
+          email: 'lister@example.com',
+          role: UserRole.FIXER,
+          isActive: true,
+        }),
+      },
+      property: { findFirst: jest.fn().mockResolvedValue(property) },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(prisma, {
+      search: jest.fn(),
+    } as unknown as PropertyService);
+
+    await expect(
+      service.createInquiry(property.userId, { listingId: property.id }),
+    ).rejects.toThrow('You cannot inquire about your own listing');
   });
 
   it('returns the persisted Step 3 notification event to both participants', async () => {
@@ -1319,6 +1360,8 @@ describe('PropertyWorkflowBridgeService BLUE inquiry contract', () => {
           id: 'customer-1',
           name: 'Customer',
           email: 'customer@example.com',
+          role: UserRole.USER,
+          isActive: true,
         }),
       },
       property: { findFirst: jest.fn().mockResolvedValue(property) },
@@ -1375,6 +1418,75 @@ describe('PropertyWorkflowBridgeService BLUE inquiry contract', () => {
         actions: expect.any(Array),
         alerts: expect.any(Array),
       }),
+    );
+  });
+
+  it('uses an authenticated partner account as the persisted inquiry customer', async () => {
+    const stored = {
+      ...inquiry(),
+      customerId: 'partner-customer-1',
+      customerName: 'Partner Customer',
+      customerEmail: 'partner@example.com',
+    };
+    const bridge = {
+      assertBridgeKey: jest.fn(),
+      resolveAuthenticatedCustomer: jest.fn().mockResolvedValue({
+        id: 'partner-customer-1',
+        name: 'Partner Customer',
+        email: 'partner@example.com',
+        role: UserRole.FIXER,
+      }),
+    };
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'partner-customer-1',
+          name: 'Partner Customer',
+          email: 'partner@example.com',
+          role: UserRole.FIXER,
+          isActive: true,
+        }),
+      },
+      property: { findFirst: jest.fn().mockResolvedValue(property) },
+      propertyInquiry: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(null)
+          .mockResolvedValue(stored),
+        create: jest
+          .fn()
+          .mockResolvedValue({ id: stored.id, poNumber: stored.poNumber }),
+      },
+    } as unknown as PrismaService;
+    const service = new PropertyWorkflowBridgeService(
+      prisma,
+      { search: jest.fn() } as unknown as PropertyService,
+      undefined,
+      bridge as any,
+    );
+
+    const snapshot = await service.createBridgeInquiry(
+      undefined,
+      { listingId: property.id, requestDetails: 'Arrange a viewing.' },
+      'bridge-key',
+      'partner-customer-inquiry',
+      'partner-customer-1',
+    );
+
+    expect(bridge.resolveAuthenticatedCustomer).toHaveBeenCalledWith(
+      'partner-customer-1',
+    );
+    expect(prisma.propertyInquiry.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerId: 'partner-customer-1',
+          listerUserId: property.userId,
+        }),
+      }),
+    );
+    expect(snapshot).toEqual(
+      expect.objectContaining({ currentStep: 3, totalSteps: 8 }),
     );
   });
 

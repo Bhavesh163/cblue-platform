@@ -94,9 +94,21 @@ export class PropertyWorkflowBridgeService {
   async createInquiry(userId: string, dto: CreatePropertyWorkflowInquiryDto) {
     const customer = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+      },
     });
     if (!customer) throw new NotFoundException('Customer not found');
+    if (
+      !customer.isActive ||
+      (customer.role !== UserRole.USER && customer.role !== UserRole.FIXER)
+    ) {
+      throw new UnauthorizedException('CBLUE customer is not authorized');
+    }
 
     const property = await this.prisma.property.findFirst({
       where: { id: dto.listingId, status: 'ACTIVE' },
@@ -123,6 +135,9 @@ export class PropertyWorkflowBridgeService {
       throw new ConflictException(
         'This listing is temporarily unavailable for new inquiries',
       );
+    }
+    if (property.userId === customer.id) {
+      throw new ConflictException('You cannot inquire about your own listing');
     }
 
     const reference = await this.nextReference();
