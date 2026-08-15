@@ -1,10 +1,22 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { NotificationType, Prisma } from '@prisma/client';
+import { createHash } from 'crypto';
+import * as bcrypt from 'bcrypt';
+import {
+  NotificationType,
+  OrderStatus,
+  PaymentStatus,
+  Prisma,
+  PropertyInquiryStatus,
+  PropertyStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateAddressDto } from './dto/create-address.dto';
@@ -633,62 +645,309 @@ export class UserService {
     return this.prisma.address.delete({ where: { id: addressId } });
   }
 
-  async deleteAccount(userId: string) {
-    const account = await this.prisma.user.findUnique({
+  private async getClosureAccount(
+    client: PrismaService | Prisma.TransactionClient,
+    userId: string,
+  ) {
+    return client.user.findUnique({
       where: { id: userId },
-      select: { id: true, subscriberId: true },
+      select: {
+        id: true,
+        email: true,
+        subscriberId: true,
+        isActive: true,
+        legalHoldUntil: true,
+        fixer: { select: { id: true } },
+      },
     });
-    if (!account) throw new NotFoundException('User not found');
+  }
 
-    const deletedAt = new Date();
-    const timestamp = deletedAt.getTime();
-    await this.prisma.$transaction(async (tx) => {
-      await tx.refreshSession.updateMany({
-        where: { userId, revokedAt: null },
-        data: {
-          revokedAt: deletedAt,
-          revocationReason: 'ACCOUNT_DELETED',
-        },
-      });
-      await tx.fixer.updateMany({
-        where: { userId },
-        data: {
-          bio: null,
-          description: null,
-          status: 'REJECTED',
-          verified: false,
-          qualificationEligibilityStatus: 'PENDING',
-          suspendedAt: deletedAt,
-          suspensionReason: 'Account deleted',
-        },
-      });
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          name: 'Deleted User',
-          email: `deleted_${userId}_${timestamp}@cblue.co.th`,
-          phone: null,
-          company: null,
-          isActive: false,
-        },
-      });
-      if (account.subscriberId) {
-        await tx.subscriber.update({
+  private async getClosureCredential(
+    client: PrismaService | Prisma.TransactionClient,
+    account: {
+      email: string | null;
+      subscriberId: string | null;
+    },
+  ) {
+    const linked = account.subscriberId
+      ? await client.subscriber.findUnique({
           where: { id: account.subscriberId },
+          select: { id: true, email: true, passwordHash: true, status: true },
+        })
+      : null;
+    if (linked) return linked;
+    if (!account.email) return null;
+    return client.subscriber.findFirst({
+      where: { email: { equals: account.email, mode: 'insensitive' } },
+      select: { id: true, email: true, passwordHash: true, status: true },
+    });
+  }
+
+  private async getClosureBlockers(
+    client: PrismaService | Prisma.TransactionClient,
+    userId: string,
+  ) {
+    const activeOrders = await client.order.count({
+      where: {
+        OR: [{ userId }, { fixer: { userId } }],
+        status: { notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED] },
+      },
+    });
+    const activePropertyInquiries = await client.propertyInquiry.count({
+      where: {
+        OR: [{ customerId: userId }, { listerUserId: userId }],
+        status: {
+          notIn: [
+            PropertyInquiryStatus.COMPLETED,
+            PropertyInquiryStatus.CANCELLED,
+            PropertyInquiryStatus.DECLINED,
+          ],
+        },
+      },
+    });
+    const pendingPayments = await client.payment.count({
+      where: {
+        status: PaymentStatus.PENDING,
+        order: { OR: [{ userId }, { fixer: { userId } }] },
+      },
+    });
+    return { activeOrders, activePropertyInquiries, pendingPayments };
+  }
+
+  async closeAccount(userId: string, currentPassword: string) {
+    const account = await this.getClosureAccount(this.prisma, userId);
+    if (!account || !account.isActive) {
+      throw new UnauthorizedException('Invalid account credentials');
+    }
+    const credential = await this.getClosureCredential(this.prisma, account);
+    if (
+      !credential ||
+      !credential.passwordHash ||
+      credential.status === 'CANCELLED' ||
+      credential.status === 'SUSPENDED'
+    ) {
+      throw new UnauthorizedException('Invalid account credentials');
+    }
+    const passwordCandidates = Array.from(
+      new Set([String(currentPassword || ''), String(currentPassword || '').trim()]),
+    ).filter(Boolean);
+    const passwordMatches = await passwordCandidates.reduce(
+      async (matchedPromise, candidate) =>
+        (await matchedPromise) ||
+        bcrypt.compare(candidate, credential.passwordHash),
+      Promise.resolve(false),
+    );
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const blockers = await this.getClosureBlockers(this.prisma, userId);
+    if (Object.values(blockers).some((count) => count > 0)) {
+      throw new ConflictException({
+        code: 'ACCOUNT_CLOSURE_BLOCKED',
+        message: 'Resolve active work and pending payments before closing the account',
+        blockers,
+      });
+    }
+
+    const closedAt = new Date();
+    const retentionDeleteAt = new Date(closedAt);
+    retentionDeleteAt.setFullYear(retentionDeleteAt.getFullYear() + 3);
+    const subjectHash = createHash('sha256').update(userId).digest('hex');
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const verifiedAccount = await this.getClosureAccount(tx, userId);
+        if (!verifiedAccount || !verifiedAccount.isActive) {
+          throw new UnauthorizedException('Invalid account credentials');
+        }
+        const verifiedCredential = await this.getClosureCredential(
+          tx,
+          verifiedAccount,
+        );
+        if (
+          !verifiedCredential ||
+          !verifiedCredential.passwordHash ||
+          verifiedCredential.status === 'CANCELLED' ||
+          verifiedCredential.status === 'SUSPENDED'
+        ) {
+          throw new UnauthorizedException('Invalid account credentials');
+        }
+        const transactionPasswordMatches = await passwordCandidates.reduce(
+          async (matchedPromise, candidate) =>
+            (await matchedPromise) ||
+            bcrypt.compare(candidate, verifiedCredential.passwordHash),
+          Promise.resolve(false),
+        );
+        if (!transactionPasswordMatches) {
+          throw new UnauthorizedException('Current password is incorrect');
+        }
+        const transactionBlockers = await this.getClosureBlockers(tx, userId);
+        if (Object.values(transactionBlockers).some((count) => count > 0)) {
+          throw new ConflictException({
+            code: 'ACCOUNT_CLOSURE_BLOCKED',
+            message: 'Resolve active work and pending payments before closing the account',
+            blockers: transactionBlockers,
+          });
+        }
+
+        const retainedOrders = await tx.order.findMany({
+          where: {
+            userId,
+            status: { in: [OrderStatus.COMPLETED, OrderStatus.CANCELLED] },
+          },
+          select: { addressId: true },
+        });
+        const retainedAddressIds = Array.from(
+          new Set(retainedOrders.map(({ addressId }) => addressId)),
+        );
+        if (retainedAddressIds.length > 0) {
+          await tx.address.updateMany({
+            where: { userId, id: { in: retainedAddressIds } },
+            data: {
+              street: null,
+              building: null,
+              unit: null,
+              notes: null,
+              latitude: null,
+              longitude: null,
+            },
+          });
+          await tx.address.deleteMany({
+            where: { userId, id: { notIn: retainedAddressIds } },
+          });
+        } else {
+          await tx.address.deleteMany({ where: { userId } });
+        }
+
+        const retainedCategories = {
+          orders: await tx.order.count({
+            where: { OR: [{ userId }, { fixer: { userId } }] },
+          }),
+          propertyInquiries: await tx.propertyInquiry.count({
+            where: { OR: [{ customerId: userId }, { listerUserId: userId }] },
+          }),
+          payments: await tx.payment.count({
+            where: { order: { OR: [{ userId }, { fixer: { userId } }] } },
+          }),
+        };
+
+        await tx.refreshSession.updateMany({
+          where: { userId, revokedAt: null },
+          data: { revokedAt: closedAt, revocationReason: 'ACCOUNT_CLOSED' },
+        });
+        if (verifiedAccount.fixer?.id) {
+          await tx.fixerSkill.deleteMany({
+            where: { fixerId: verifiedAccount.fixer.id },
+          });
+          await tx.fixerAvailability.deleteMany({
+            where: { fixerId: verifiedAccount.fixer.id },
+          });
+          await tx.image.deleteMany({
+            where: { fixerId: verifiedAccount.fixer.id, orderId: null },
+          });
+          await tx.fixer.updateMany({
+            where: { userId },
+            data: {
+              bio: null,
+              description: null,
+              pastExperience: null,
+              pastProjectType: null,
+              priceList: Prisma.JsonNull,
+              status: 'REJECTED',
+              verified: false,
+              qualificationEligibilityStatus: 'PENDING',
+              suspendedAt: closedAt,
+              suspensionReason: 'Account closed',
+              contactPhone: null,
+              companyAddress: Prisma.JsonNull,
+              publicDisplayName: null,
+              verifiedCompanyName: null,
+            },
+          });
+        }
+        await tx.property.updateMany({
+          where: { userId },
           data: {
-            email: `deleted_subscriber_${account.subscriberId}_${timestamp}@cblue.co.th`,
-            name: 'Deleted User',
-            phone: '',
-            company: null,
-            status: 'CANCELLED',
-            serviceCategory: null,
-            description: null,
-            resetToken: null,
-            resetTokenExpiry: null,
+            status: PropertyStatus.REMOVED,
+            title: 'Removed listing',
+            description: '',
+            contactName: 'Removed account',
+            contactPhone: '',
+            contactEmail: null,
+            addressLine: null,
+            latitude: null,
+            longitude: null,
           },
         });
+        await tx.notification.deleteMany({ where: { userId } });
+        if (verifiedAccount.fixer?.id) {
+          await tx.kycDocument.updateMany({
+            where: {
+              submission: { fixerId: verifiedAccount.fixer.id },
+              OR: [
+                { legalHoldUntil: null },
+                { legalHoldUntil: { lte: closedAt } },
+              ],
+            },
+            data: {
+              isActive: false,
+              lifecycleState: 'DELETE_PENDING',
+              retentionDeleteAt,
+            },
+          });
+        }
+
+        if (verifiedCredential.id) {
+          await tx.subscriber.delete({
+            where: { id: verifiedCredential.id },
+          });
+        }
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            subscriberId: null,
+            name: 'Removed account',
+            email: `deleted+${subjectHash.slice(0, 24)}@cblue.co.th`,
+            phone: null,
+            company: null,
+            isActive: false,
+            deletedAt: closedAt,
+            deletionPolicyVersion: '2026-08-15',
+          },
+        });
+        await tx.accountDeletionAudit.create({
+          data: {
+            subjectHash,
+            policyVersion: '2026-08-15',
+            requestedAt: closedAt,
+            completedAt: closedAt,
+            retentionDeleteAt,
+            legalHoldUntil: verifiedAccount.legalHoldUntil,
+            retainedCategories,
+          },
+        });
+      });
+    } catch (error) {
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
       }
-    });
-    return { success: true, message: 'Account deleted via PDPA' };
+      this.logger.error(
+        `Account closure failed for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw new ServiceUnavailableException(
+        'Account closure is temporarily unavailable',
+      );
+    }
+    return { success: true };
+  }
+
+  async deleteAccount(_userId: string) {
+    throw new BadRequestException(
+      'Password confirmation is required to close this account',
+    );
   }
 }

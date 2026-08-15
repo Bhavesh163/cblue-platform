@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 describe('UserService', () => {
@@ -11,6 +15,15 @@ describe('UserService', () => {
     user: Record<string, jest.Mock>;
     address: Record<string, jest.Mock>;
     fixer: Record<string, jest.Mock>;
+    fixerSkill: Record<string, jest.Mock>;
+    fixerAvailability: Record<string, jest.Mock>;
+    image: Record<string, jest.Mock>;
+    order: Record<string, jest.Mock>;
+    payment: Record<string, jest.Mock>;
+    property: Record<string, jest.Mock>;
+    propertyInquiry: Record<string, jest.Mock>;
+    kycDocument: Record<string, jest.Mock>;
+    accountDeletionAudit: Record<string, jest.Mock>;
     subscriber: Record<string, jest.Mock>;
     notification: Record<string, jest.Mock>;
     refreshSession: Record<string, jest.Mock>;
@@ -31,14 +44,26 @@ describe('UserService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
         delete: jest.fn(),
+        deleteMany: jest.fn(),
       },
       fixer: { update: jest.fn(), updateMany: jest.fn() },
+      fixerSkill: { deleteMany: jest.fn() },
+      fixerAvailability: { deleteMany: jest.fn() },
+      image: { deleteMany: jest.fn() },
+      order: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn() },
+      payment: { count: jest.fn().mockResolvedValue(0) },
+      property: { updateMany: jest.fn() },
+      propertyInquiry: { count: jest.fn().mockResolvedValue(0) },
+      kycDocument: { updateMany: jest.fn() },
+      accountDeletionAudit: { create: jest.fn() },
       subscriber: {
+        findUnique: jest.fn(),
         findFirst: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
+        delete: jest.fn(),
       },
-      notification: { createMany: jest.fn() },
+      notification: { createMany: jest.fn(), deleteMany: jest.fn() },
       refreshSession: { updateMany: jest.fn() },
     };
     prisma.$transaction.mockImplementation(
@@ -665,56 +690,11 @@ describe('UserService', () => {
   });
 
   describe('deleteAccount', () => {
-    it('atomically anonymizes both identities and revokes every session', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-1',
-        subscriberId: 'subscriber-1',
-      });
-      prisma.user.update.mockResolvedValue({ id: 'user-1' });
-      prisma.fixer.updateMany.mockResolvedValue({ count: 1 });
-      prisma.subscriber.update.mockResolvedValue({ id: 'subscriber-1' });
-      prisma.refreshSession.updateMany.mockResolvedValue({ count: 2 });
-
-      await expect(service.deleteAccount('user-1')).resolves.toEqual(
-        expect.objectContaining({ success: true }),
+    it('does not perform unconfirmed deletion', async () => {
+      await expect(service.deleteAccount('user-1')).rejects.toThrow(
+        BadRequestException,
       );
-
-      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-      expect(prisma.refreshSession.updateMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1', revokedAt: null },
-        data: {
-          revokedAt: expect.any(Date),
-          revocationReason: 'ACCOUNT_DELETED',
-        },
-      });
-      expect(prisma.subscriber.update).toHaveBeenCalledWith({
-        where: { id: 'subscriber-1' },
-        data: expect.objectContaining({
-          status: 'CANCELLED',
-          name: 'Deleted User',
-          phone: '',
-          company: null,
-          resetToken: null,
-          resetTokenExpiry: null,
-        }),
-      });
-      expect(prisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
-        data: expect.objectContaining({
-          isActive: false,
-          name: 'Deleted User',
-          phone: null,
-          company: null,
-        }),
-      });
-      expect(prisma.fixer.updateMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1' },
-        data: expect.objectContaining({
-          status: 'REJECTED',
-          verified: false,
-          qualificationEligibilityStatus: 'PENDING',
-        }),
-      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });

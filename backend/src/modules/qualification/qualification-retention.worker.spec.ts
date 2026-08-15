@@ -14,6 +14,9 @@ describe('QualificationRetentionWorker', () => {
     qualificationAuditLog: {
       create: jest.fn(),
     },
+    accountDeletionAudit: {
+      deleteMany: jest.fn(),
+    },
     notification: {
       createMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
@@ -30,6 +33,7 @@ describe('QualificationRetentionWorker', () => {
     prisma.user.update.mockResolvedValue({});
     prisma.kycDocument.updateMany.mockResolvedValue({ count: 1 });
     prisma.qualificationAuditLog.create.mockResolvedValue({ id: 'audit-1' });
+    prisma.accountDeletionAudit.deleteMany.mockResolvedValue({ count: 0 });
   });
 
   afterEach(() => {
@@ -109,5 +113,23 @@ describe('QualificationRetentionWorker', () => {
         ]),
       }),
     );
+  });
+
+  it('purges only expired account-closure audits without an active legal hold', async () => {
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.accountDeletionAudit.deleteMany.mockResolvedValue({ count: 2 });
+    const worker = new QualificationRetentionWorker(prisma);
+
+    await expect(worker.runBatch()).resolves.toBe(2);
+
+    expect(prisma.accountDeletionAudit.deleteMany).toHaveBeenCalledWith({
+      where: {
+        retentionDeleteAt: { lte: new Date('2026-08-02T00:00:00.000Z') },
+        OR: [
+          { legalHoldUntil: null },
+          { legalHoldUntil: { lt: new Date('2026-08-02T00:00:00.000Z') } },
+        ],
+      },
+    });
   });
 });

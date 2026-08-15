@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
+import AccountClosureDialog from "../components/AccountClosureDialog";
 import { clearSubscriberSession, ensureFreshSubscriberSession, fetchWithSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
 import { customerPhoneUpdateError } from "../../../lib/customerProfilePhone";
 import {
@@ -1360,16 +1361,14 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders, o
               <button type="button" onClick={() => { setIsEditing((value) => !value); setProfileError(""); setProfileMessage(""); }} className="px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-semibold">
                 {isEditing ? (locale === "th" ? "ยกเลิก" : locale === "zh" ? "取消" : "Cancel") : (locale === "th" ? "แก้ไขเบอร์โทรศัพท์" : locale === "zh" ? "编辑电话号码" : "Edit phone number")}
               </button>
-              <button onClick={() => {
-                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Accept deleting your account and all data per PDPA law?")) {
-                  fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${getCustomerDashboardToken()}` } })
-                  .then(() => { localStorage.clear(); window.location.href = `/${locale}/subscription/login`; });
-                }
-              }} className="px-4 py-2 border border-red-200 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition text-sm font-semibold">
-                {locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
-              </button>
-            </div>
-          </div>
+              <AccountClosureDialog
+                locale={locale as "th" | "en" | "zh"}
+                token={getCustomerDashboardToken()}
+                label={locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
+                className="px-4 py-2 border border-red-200 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition text-sm font-semibold"
+                onSuccess={() => { window.location.href = `/${locale}/subscription/login`; }}
+              />
+            </div>          </div>
 
           {isEditing && (
             <div className="mb-6 max-w-xl rounded-lg border border-gray-200 bg-gray-50 p-4">

@@ -240,10 +240,12 @@ model User {
   role     UserRole @default(USER)
   isActive Boolean  @default(true)
 
-  lastActivityAt   DateTime  @default(now())
-  inactiveNoticeAt DateTime?
-  inactiveDeleteAt DateTime?
-  legalHoldUntil   DateTime?
+  lastActivityAt        DateTime  @default(now())
+  inactiveNoticeAt      DateTime?
+  inactiveDeleteAt      DateTime?
+  legalHoldUntil        DateTime?
+  deletedAt             DateTime?
+  deletionPolicyVersion String?
 
   subscriberId String? @unique
 
@@ -262,6 +264,22 @@ model User {
   updatedAt DateTime @updatedAt
 
   @@map("users")
+}
+
+model AccountDeletionAudit {
+  id                 String    @id @default(uuid())
+  subjectHash        String    @unique
+  policyVersion      String
+  requestedAt        DateTime
+  completedAt        DateTime
+  retentionDeleteAt  DateTime
+  legalHoldUntil     DateTime?
+  retainedCategories Json
+  createdAt          DateTime  @default(now())
+
+  @@index([retentionDeleteAt])
+  @@index([legalHoldUntil])
+  @@map("account_deletion_audits")
 }
 
 model RefreshSession {
@@ -1101,10 +1119,10 @@ model PropertyInquiry {
   attachments     PropertyInquiryAttachment[]
   workflowEvents  PropertyInquiryWorkflowEvent[]
 
+  @@unique([customerId, idempotencyKey])
   @@index([customerId])
   @@index([listerUserId])
   @@index([propertyId])
-  @@unique([customerId, idempotencyKey])
   @@map("property_inquiries")
 }
 

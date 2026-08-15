@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useLocale } from "next-intl";
 import { useRouter } from "next/navigation";
+import AccountClosureDialog from "../components/AccountClosureDialog";
 import PdpaConsent from "../components/PdpaConsent";
 import PartnerQualificationStatus from "../components/PartnerQualificationStatus";
 import {
@@ -15136,34 +15137,13 @@ function PartnerProfile({
                       ? "编辑资料"
                       : "Edit Profile"}
                 </Link>
-                <button
-                  onClick={() => {
-                    if (
-                      confirm(
-                        locale === "th"
-                          ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?"
-                          : "Confirm deleting your account and all data per PDPA law?",
-                      )
-                    ) {
-                      fetch("/api/v1/users/me", {
-                        method: "DELETE",
-                        headers: {
-                          Authorization: `Bearer ${getPartnerDashboardToken()}`,
-                        },
-                      }).then(() => {
-                        localStorage.clear();
-                        window.location.href = "/subscription/login";
-                      });
-                    }
-                  }}
+                <AccountClosureDialog
+                  locale={locale as "th" | "en" | "zh"}
+                  token={getPartnerDashboardToken()}
+                  label={locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
                   className="px-5 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-semibold shadow-sm"
-                >
-                  {locale === "th"
-                    ? "ลบบัญชี"
-                    : locale === "zh"
-                      ? "删除账户"
-                      : "Delete Account"}
-                </button>
+                  onSuccess={() => { window.location.href = "/subscription/login"; }}
+                />
               </div>
             </div>
 

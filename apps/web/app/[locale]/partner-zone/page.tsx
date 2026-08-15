@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useLocale } from "next-intl";
+import AccountClosureDialog from "../components/AccountClosureDialog";
 
 
 
@@ -911,14 +912,13 @@ function ProfileTab({ t, locale, profile, renderStars }: {
               <button className="px-3 py-1 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 transition text-xs font-semibold">
                 {t.editProfile}
               </button>
-              <button onClick={() => {
-                if (confirm(locale === "th" ? "ยืนยันการลบบัญชีและข้อมูลทั้งหมดตามกฎหมาย PDPA?" : "Accept deleting your account and all data per PDPA law?")) {
-                  fetch('/api/v1/users/me', { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('provider_token') || ''}` } })
-                  .then(() => { localStorage.clear(); window.location.href = `/${locale}/subscription/login`; });
-                }
-              }} className="px-3 py-1 bg-red-50 border border-red-200 text-red-600 rounded-full hover:bg-red-100 transition text-xs font-semibold">
-                {locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
-              </button>
+              <AccountClosureDialog
+                locale={locale as "th" | "en" | "zh"}
+                token={typeof window === "undefined" ? null : localStorage.getItem("provider_token")}
+                label={locale === "th" ? "ลบบัญชี" : locale === "zh" ? "删除账户" : "Delete Account"}
+                className="px-3 py-1 bg-red-50 border border-red-200 text-red-600 rounded-full hover:bg-red-100 transition text-xs font-semibold"
+                onSuccess={() => { window.location.href = `/${locale}/subscription/login`; }}
+              />
             </div>
           </div>
         </div>

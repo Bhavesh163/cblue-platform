@@ -147,6 +147,17 @@ export class QualificationRetentionWorker
 
     let scheduled = 0;
 
+    const deletedAudits = await this.prisma.accountDeletionAudit.deleteMany({
+      where: {
+        retentionDeleteAt: { lte: now },
+        OR: [
+          { legalHoldUntil: null },
+          { legalHoldUntil: { lt: now } },
+        ],
+      },
+    });
+    scheduled += deletedAudits.count;
+
     const consentDue = await this.prisma.kycSubmission.findMany({
       where: {
         consentRetentionDeleteAt: { lte: now },
