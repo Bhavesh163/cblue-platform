@@ -325,6 +325,38 @@ export class PropertyWorkflowBridgeService {
     return this.projectSnapshot(inquiry, actor, messages);
   }
 
+  async activitiesForUserIds(
+    userIds: string[],
+    persona: 'customer' | 'partner',
+  ) {
+    const viewerUserIds = Array.from(
+      new Set(userIds.map((userId) => String(userId || '').trim()).filter(Boolean)),
+    );
+    if (viewerUserIds.length === 0) return [];
+
+    const inquiries = await this.prisma.propertyInquiry.findMany({
+      where:
+        persona === 'customer'
+          ? { customerId: { in: viewerUserIds } }
+          : { listerUserId: { in: viewerUserIds } },
+      include: {
+        property: { include: { images: { orderBy: { sortOrder: 'asc' } } } },
+        attachments: { orderBy: { createdAt: 'asc' } },
+        workflowEvents: { orderBy: { createdAt: 'asc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const actor = persona === 'customer' ? 'customer' : 'lister';
+    return Promise.all(
+      inquiries.map(async (inquiry: any) => {
+        const actorUserId =
+          persona === 'customer' ? inquiry.customerId : inquiry.listerUserId;
+        const messages = await this.loadChat(actorUserId, inquiry.poNumber);
+        return this.projectSnapshot(inquiry, actor, messages);
+      }),
+    );
+  }
+
   private async loadChat(userId: string, reference: string) {
     try {
       if (!this.propertyInquiryService) return [];

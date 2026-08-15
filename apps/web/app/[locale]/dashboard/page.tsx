@@ -267,7 +267,7 @@ const isOrderUuid = (value: any) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || '').trim(),
   );
-const PROP_PO_PATTERN = /^PRE-\d{4}-\d{4}$/i;
+const PROP_PO_PATTERN = /^PRE-\d{4}-\d{4,6}$/i;
 const isPropPoCode = (value: string) => PROP_PO_PATTERN.test(String(value || '').trim());
 const extractPoCode = (orderLike: any) => {
   if (!orderLike) return "";
@@ -4485,7 +4485,7 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         <div className="flex items-center gap-4">
            <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">{(item.title || "R").charAt(0)}</div>
            <div>
-             <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po}{item.step ? ` · Step ${item.step} of 11` : ''}</span></h3>
+             {(() => { const itemIsProperty = isPropPoCode(item.po) || item.propInquiry || String(item.type || '').startsWith('prop_'); return <h3 className="font-bold text-gray-900">{item.title} <span className="text-sm font-normal text-gray-500">· {item.po}{item.step ? ` · Step ${item.step} of ${itemIsProperty ? 8 : 11}` : ''}</span></h3>; })()}
              <p className="text-sm text-gray-600 mt-0.5">{item.customer} · {item.date}</p>
               {(item.cardLocation || item.siteSubdistrict || item.subdistrict) && <p className="text-xs text-gray-500 mt-0.5">{item.cardLocation || item.siteSubdistrict || item.subdistrict}</p>}
              <p className="text-xs text-gray-500 mt-1">{item.desc}</p>

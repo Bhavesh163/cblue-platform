@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Optional,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { normalizeThaiGpsLocation } from '../../common/thai-gps-location';
 import { providerDisplayName } from '../../common/provider-display-name';
 import type { BlueWorkflowDetailResponse } from './blue-bridge.controller';
+import { PropertyWorkflowBridgeService } from './property-workflow-bridge.service';
 
 interface WorkflowDetailInput {
   poNumber: string;
@@ -108,6 +110,8 @@ export class BlueBridgeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    @Optional()
+    private readonly propertyWorkflow?: PropertyWorkflowBridgeService,
   ) {}
 
   async authenticatedWorkflowDetails(
@@ -419,11 +423,24 @@ export class BlueBridgeService {
       orderBy: { createdAt: 'desc' },
     })) as any[];
 
-    const activities = deduplicateWorkflowActivities(
+    const fixerActivities = deduplicateWorkflowActivities(
       orders
         .map((order) => this.workflowActivity(order, viewerUserIds))
         .filter(Boolean) as Array<Record<string, any>>,
     );
+    const propertySnapshots = this.propertyWorkflow
+      ? await this.propertyWorkflow.activitiesForUserIds(
+          viewerUserIds,
+          input.persona,
+        )
+      : [];
+    const propertyActivities = propertySnapshots.map((snapshot) =>
+      propertyWorkflowActivity(snapshot, input.persona),
+    );
+    const activities = deduplicateWorkflowActivities([
+      ...fixerActivities,
+      ...propertyActivities,
+    ]);
     const notifications = await this.prisma.notification.findMany({
       where: { userId: { in: viewerUserIds } },
       orderBy: { createdAt: 'desc' },
@@ -462,6 +479,25 @@ export class BlueBridgeService {
             }];
       }),
     );
+    const propertyEventAlerts = propertyActivities.flatMap((activity) =>
+      (activity.workflowEvents || [])
+        .filter(
+          (event: any) =>
+            event.actorRole !==
+            (input.persona === 'customer' ? 'customer' : 'partner'),
+        )
+        .map((event: any) => ({
+          id: `property-workflow-event:${activity.poNumber}:${event.action}:${event.createdAt}`,
+          type: 'PROPERTY_WORKFLOW',
+          status: 'SENT',
+          action: event.action,
+          currentStep: event.step,
+          createdAt: event.createdAt,
+          readAt: null,
+          title: propertyWorkflowEventTitle(event.action),
+          body: propertyWorkflowEventBody(activity.poNumber, event.action),
+        })),
+    );
 
     return {
       sourceVersion: 'cblue-fixer-workflow-activities-v1' as const,
@@ -488,6 +524,7 @@ export class BlueBridgeService {
         })),
       alerts: [
         ...eventAlerts,
+        ...propertyEventAlerts,
         ...notifications.map((notification) => ({
           id: notification.id,
           type: notification.type,
@@ -1584,6 +1621,152 @@ function deduplicateWorkflowActivities(
     }
   }
   return [...byPo.values()];
+}
+
+function propertyWorkflowActivity(
+  snapshot: Record<string, any>,
+  persona: 'customer' | 'partner',
+): Record<string, any> {
+  const status = String(snapshot.status || '').trim().toUpperCase();
+  const rawEvents = Array.isArray(snapshot.history)
+    ? snapshot.history
+    : Array.isArray(snapshot.workflowEvents) ? snapshot.workflowEvents : [];
+  const events = rawEvents.map((event: Record<string, any>) => ({
+    action: event.action,
+    step: event.step,
+    createdAt: toIsoTimestamp(event.createdAt),
+    actorRole: event.actorRole === 'lister' ? 'partner' : event.actorRole,
+    note: event.note || undefined,
+  }));
+  const normalizeOwner = (owner: unknown) =>
+    owner === 'lister' ? 'partner' : owner === 'customer' ? 'customer' : null;
+  const actions = (snapshot.actions || []).map((action: Record<string, any>) => ({
+    ...action,
+    owner: normalizeOwner(action.owner),
+  }));
+  const customer = snapshot.customer
+    ? {
+        id: snapshot.customer.id,
+        displayName: snapshot.customer.name || snapshot.customer.email || 'Customer',
+        email: snapshot.customer.email,
+      }
+    : null;
+  const partner = snapshot.selectedLister
+    ? {
+        id: snapshot.selectedLister.id,
+        displayName: snapshot.selectedLister.name || 'Partner',
+      }
+    : null;
+  const location = snapshot.locationPresentation?.summaryDisplay || '';
+  const meeting = snapshot.meeting
+    ? {
+        venue: String(snapshot.meeting.venue || ''),
+        date: String(snapshot.meeting.date || ''),
+        time: String(snapshot.meeting.time || ''),
+        note: String(snapshot.meeting.note || ''),
+      }
+    : null;
+  const nextActionOwner = normalizeOwner(snapshot.nextActionOwner);
+  const availableActions = Array.isArray(snapshot.availableActions)
+    ? snapshot.availableActions
+    : [];
+
+  return {
+    workflowType: 'property',
+    sourceVersion: snapshot.sourceVersion,
+    poNumber: snapshot.poNumber,
+    currentStep: snapshot.currentStep,
+    totalSteps: snapshot.totalSteps,
+    workflowVersion: 0,
+    workflowPhase: status,
+    workflowEvents: events,
+    status,
+    lifecycleStatus: snapshot.terminalState || status,
+    activityBucket: snapshot.activityBucket,
+    archivedAt: null,
+    cancelledAt: status === 'CANCELLED' ? snapshot.timestamps?.updatedAt : null,
+    declinedAt: status === 'DECLINED' ? snapshot.timestamps?.updatedAt : null,
+    ratedAt: status === 'COMPLETED' ? snapshot.timestamps?.updatedAt : null,
+    title: snapshot.listing?.title || snapshot.poNumber,
+    serviceCategory: snapshot.listing?.propertyType || 'PROPERTY',
+    createdAt: toIsoTimestamp(snapshot.timestamps?.createdAt),
+    updatedAt: toIsoTimestamp(snapshot.timestamps?.updatedAt),
+    location,
+    siteSubdistrict: snapshot.locationPresentation?.siteSubdistrict || '',
+    customer,
+    partner,
+    actions,
+    availableActions,
+    actionNeeded: availableActions.length > 0,
+    actionOwner: nextActionOwner,
+    nextActionKey: snapshot.nextActionLabel ? availableActions[0] || null : null,
+    nextActionLabel: snapshot.nextActionLabel || null,
+    nextActionOwner,
+    nextActionStep: snapshot.nextActionStep ?? null,
+    processingFee: snapshot.processingFee || null,
+    chat: {
+      enabled: snapshot.chat?.enabled === true,
+      messageItems: Array.isArray(snapshot.chat?.messages)
+        ? snapshot.chat.messages
+        : [],
+    },
+    meeting,
+    messageItems: Array.isArray(snapshot.chat?.messages)
+      ? snapshot.chat.messages
+      : [],
+    listing: snapshot.listing,
+    locationPresentation: snapshot.locationPresentation,
+    uploadedFiles: snapshot.uploadedFiles || [],
+    requestDetails: snapshot.requestDetails || '',
+    feeState: snapshot.feeState,
+    selectedLister: snapshot.selectedLister,
+  };
+}
+
+function propertyWorkflowEventTitle(action: unknown): string {
+  switch (String(action || '').trim().toLowerCase()) {
+    case 'accept':
+    case 'partner-accept':
+      return 'Property inquiry accepted';
+    case 'decline':
+    case 'partner-decline':
+      return 'Property inquiry declined';
+    case 'fee':
+    case 'fee-proceed':
+    case 'free-pass':
+      return 'Property inquiry moved forward';
+    case 'viewing-invite':
+      return 'Viewing invitation received';
+    case 'viewing-confirm':
+    case 'viewing-confirmation':
+      return 'Viewing invitation confirmed';
+    case 'customer-rating':
+    case 'rate-partner':
+    case 'lister-rating':
+    case 'rate-customer':
+      return 'Property inquiry rating updated';
+    case 'cancel':
+    case 'customer-cancel':
+      return 'Property inquiry cancelled';
+    default:
+      return 'Property inquiry updated';
+  }
+}
+
+function propertyWorkflowEventBody(poNumber: string, action: unknown): string {
+  const reference = String(poNumber || '').trim();
+  switch (String(action || '').trim().toLowerCase()) {
+    case 'accept':
+    case 'partner-accept':
+      return reference + ': The lister accepted your property inquiry.';
+    case 'viewing-invite':
+      return reference + ': A viewing invitation is ready for your review.';
+    case 'viewing-confirm':
+    case 'viewing-confirmation':
+      return reference + ': The viewing invitation has been confirmed.';
+    default:
+      return reference + ': Your property inquiry has been updated.';
+  }
 }
 
 function resolvePropertyLifecycle(inquiry: {
