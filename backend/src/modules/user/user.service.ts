@@ -399,6 +399,7 @@ export class UserService {
         email: true,
         phone: true,
         role: true,
+        createdAt: true,
         fixer: {
           select: {
             contactPhone: true,

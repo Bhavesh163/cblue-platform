@@ -140,6 +140,30 @@ describe('UserService', () => {
       });
     });
 
+    it('selects the persisted account creation date for the authoritative contact profile', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-customer',
+        name: 'test1',
+        email: 'test1@gmail.com',
+        phone: '0812345678',
+        role: 'USER',
+        createdAt: new Date('2026-08-14T00:00:00.000Z'),
+        fixer: null,
+      });
+
+      await expect(
+        service.getContactProfile('user-customer'),
+      ).resolves.toMatchObject({
+        email: 'test1@gmail.com',
+        phone: '0812345678',
+        createdAt: '2026-08-14T00:00:00.000Z',
+      });
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-customer' },
+        select: expect.objectContaining({ createdAt: true }),
+      });
+    });
+
     it('repairs a historical customer phone from the linked subscriber', async () => {
       prisma.user.findUnique.mockResolvedValue({
         id: 'user-customer',
