@@ -22,6 +22,7 @@ type CustomerProfileResponse = {
   email: string;
   phone: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 describe('BLUE customer profile contract', () => {
@@ -58,6 +59,7 @@ describe('BLUE customer profile contract', () => {
       role: 'USER',
       isActive: true,
       createdAt: new Date('2026-08-14T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-15T01:00:00.000Z'),
     };
     subscriberRow = {
       id: 'subscriber-test1',
@@ -82,9 +84,14 @@ describe('BLUE customer profile contract', () => {
             Promise.resolve(selectFields(userRow, select)),
           ),
         update: jest.fn().mockImplementation(({ data }: UpdateArgs) => {
-          userRow = { ...userRow, ...data };
+          userRow = {
+            ...userRow,
+            ...data,
+            updatedAt: new Date('2026-08-15T02:00:00.000Z'),
+          };
           return Promise.resolve({ id: userRow.id });
         }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       subscriber: {
         findFirst: jest
@@ -145,6 +152,7 @@ describe('BLUE customer profile contract', () => {
             email: 'test1@gmail.com',
             phone: '0812345678',
             createdAt: '2026-08-14T00:00:00.000Z',
+            updatedAt: '2026-08-15T01:00:00.000Z',
           });
         });
 
@@ -157,10 +165,21 @@ describe('BLUE customer profile contract', () => {
           const profile = response.body as CustomerProfileResponse;
           expect(profile.phone).toBe('0822222222');
           expect(profile.createdAt).toBe('2026-08-14T00:00:00.000Z');
+          expect(profile.updatedAt).toBe('2026-08-15T02:00:00.000Z');
         });
 
-      expect(userRow.phone).toBe('0822222222');
-      expect(subscriberRow.phone).toBe('0822222222');
+      await request(httpServer())
+        .put('/api/v1/blue/customer-profile/phone')
+        .set('x-blue-bridge-key', 'bridge-key')
+        .send({ legacySubjectId, phone: '0812345678' })
+        .expect(200)
+        .expect((response: Response) => {
+          const profile = response.body as CustomerProfileResponse;
+          expect(profile.phone).toBe('0812345678');
+        });
+
+      expect(userRow.phone).toBe('0812345678');
+      expect(subscriberRow.phone).toBe('0812345678');
     },
   );
 

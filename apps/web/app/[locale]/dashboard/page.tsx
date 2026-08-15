@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
 import { clearSubscriberSession, ensureFreshSubscriberSession, fetchWithSubscriberSession, refreshSubscriberSession } from "../../../lib/subscriberSession";
+import { customerPhoneUpdateError } from "../../../lib/customerProfilePhone";
 import {
   buildMeetingConfirmedAlert,
   collectTerminalWorkflowPos,
@@ -81,6 +82,7 @@ interface SubscriberInfo {
   company?: string;
   status: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 type ServiceType = "household" | "project" | "professional" | "property";
@@ -1086,7 +1088,7 @@ export default function DashboardPage() {
           <CustomerDashboard locale={locale} subscriber={subscriber} prefix={prefix} orders={orders} hasFetchedOrders={hasFetchedOrders} onSubscriberUpdated={(profile) => {
             setSubscriber((current) => {
               if (!current) return current;
-              const updated = { ...current, phone: profile.phone, createdAt: profile.createdAt || current.createdAt };
+              const updated = { ...current, phone: profile.phone, createdAt: profile.createdAt || current.createdAt, updatedAt: profile.updatedAt || current.updatedAt };
               writeCustomerDashboardSession(updated, getCustomerDashboardToken());
               localStorage.setItem("subscriber", JSON.stringify(updated));
               return updated;
@@ -1301,7 +1303,7 @@ function HistoryTab({ locale, historyOrders }: { locale: string; historyOrders: 
 }
 
 /* ===== PROFILE TAB ===== */
-function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders, onProfileUpdated }: { locale: string; prefix: string; subscriber: any; activeOrders: any[]; onOrderClick?: (o: any) => void; historyOrders: any[]; onProfileUpdated: (profile: { phone: string; createdAt?: string }) => void }) {
+function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders, onProfileUpdated }: { locale: string; prefix: string; subscriber: any; activeOrders: any[]; onOrderClick?: (o: any) => void; historyOrders: any[]; onProfileUpdated: (profile: { phone: string; createdAt?: string; updatedAt?: string }) => void }) {
     const [isEditing, setIsEditing] = useState(false);
     const [phone, setPhone] = useState(String(subscriber?.phone || ""));
     const [isSaving, setIsSaving] = useState(false);
@@ -1321,19 +1323,21 @@ function ProfileTab({ locale, prefix, subscriber, activeOrders, historyOrders, o
       setIsSaving(true);
       setProfileError("");
       setProfileMessage("");
+      let responseStatus = 0;
       try {
         const response = await fetchWithSubscriberSession("/api/v1/users/me/phone", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phone: nextPhone }),
         }, getCustomerDashboardToken());
+        responseStatus = response?.status || 0;
         if (!response?.ok) throw new Error("profile-update-failed");
         const profile = await response.json();
-        onProfileUpdated({ phone: String(profile.phone || nextPhone), createdAt: profile.createdAt });
+        onProfileUpdated({ phone: String(profile.phone || nextPhone), createdAt: profile.createdAt, updatedAt: profile.updatedAt });
         setIsEditing(false);
         setProfileMessage(locale === "th" ? "อัปเดตเบอร์โทรศัพท์แล้ว" : locale === "zh" ? "电话号码已更新" : "Phone number updated");
       } catch {
-        setProfileError(locale === "th" ? "ไม่สามารถอัปเดตเบอร์โทรศัพท์ได้ กรุณาลองอีกครั้ง" : locale === "zh" ? "无法更新电话号码，请重试" : "We could not update your phone number. Please try again.");
+        setProfileError(customerPhoneUpdateError(locale, responseStatus));
       } finally {
         setIsSaving(false);
       }
@@ -1604,7 +1608,7 @@ function CustomerHistoryCard({ item, idx, compact = false, locale = "en" }: { it
 
 
 /* ===== DASHBOARD LOGGED IN STATE ===== */
-function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFetchedOrders, onSubscriberUpdated, onWorkflowSnapshot }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[], hasFetchedOrders?: boolean; onSubscriberUpdated: (profile: { phone: string; createdAt?: string }) => void; onWorkflowSnapshot?: (po: string, snapshot: any) => void }) {
+function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFetchedOrders, onSubscriberUpdated, onWorkflowSnapshot }: { locale: string; subscriber: any; prefix: string; onLogout: () => void, orders: any[], hasFetchedOrders?: boolean; onSubscriberUpdated: (profile: { phone: string; createdAt?: string; updatedAt?: string }) => void; onWorkflowSnapshot?: (po: string, snapshot: any) => void }) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview"|"requests"|"profile"|"active"|"properties"|"history"|"chat"|"alerts">("overview");
   const [waitModalOrder, setWaitModalOrder] = useState<any>(null);

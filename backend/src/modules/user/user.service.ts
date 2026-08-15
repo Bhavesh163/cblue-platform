@@ -26,6 +26,7 @@ export type UserContactProfile = {
   phone: string;
   role: string;
   createdAt: string;
+  updatedAt: string;
   companyIdentityVerified: boolean;
   profileComplete: boolean;
 };
@@ -400,6 +401,7 @@ export class UserService {
         phone: true,
         role: true,
         createdAt: true,
+        updatedAt: true,
         fixer: {
           select: {
             contactPhone: true,
@@ -434,6 +436,9 @@ export class UserService {
       phone,
       role: String(hydratedUser.role || ''),
       createdAt: hydratedUser.createdAt.toISOString(),
+      updatedAt: (
+        hydratedUser.updatedAt ?? hydratedUser.createdAt
+      ).toISOString(),
       companyIdentityVerified: Boolean(
         hydratedUser.fixer?.verifiedCompanyName &&
         hydratedUser.fixer.companyIdentityVerifiedAt,
@@ -487,6 +492,14 @@ export class UserService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        await tx.user.updateMany({
+          where: {
+            id: { not: userId },
+            phone,
+            isActive: false,
+          },
+          data: { phone: null },
+        });
         await tx.user.update({
           where: { id: userId },
           data: { phone },

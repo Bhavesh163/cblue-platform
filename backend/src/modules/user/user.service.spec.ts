@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 describe('UserService', () => {
   let service: UserService;
@@ -21,6 +22,7 @@ describe('UserService', () => {
       user: {
         findUnique: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       address: {
         findMany: jest.fn(),
@@ -119,6 +121,7 @@ describe('UserService', () => {
         phone: null,
         role: 'FIXER',
         createdAt: new Date('2026-08-13T00:00:00.000Z'),
+        updatedAt: new Date('2026-08-13T01:00:00.000Z'),
         fixer: {
           contactPhone: '0818544291',
           publicDisplayName: 'Construction Blue',
@@ -135,6 +138,7 @@ describe('UserService', () => {
         phone: '0818544291',
         role: 'FIXER',
         createdAt: '2026-08-13T00:00:00.000Z',
+        updatedAt: '2026-08-13T01:00:00.000Z',
         companyIdentityVerified: true,
         profileComplete: true,
       });
@@ -474,6 +478,7 @@ describe('UserService', () => {
           fixer: null,
         });
       prisma.user.update.mockResolvedValue({ id: 'user-1' });
+      prisma.user.updateMany.mockResolvedValue({ count: 0 });
       prisma.subscriber.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.updateProfile('user-1', {
@@ -484,6 +489,14 @@ describe('UserService', () => {
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: 'user-1' },
         data: { phone: '0822222222' },
+      });
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: { not: 'user-1' },
+          phone: '0822222222',
+          isActive: false,
+        },
+        data: { phone: null },
       });
       expect(prisma.subscriber.updateMany).toHaveBeenCalledWith({
         where: { id: 'subscriber-1' },
@@ -536,6 +549,30 @@ describe('UserService', () => {
         'verified',
       );
       expect(prisma.notification.createMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps an active account phone protected', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-1',
+        email: 'customer@example.com',
+        phone: '0811111111',
+        subscriberId: 'subscriber-1',
+        fixer: null,
+      });
+      prisma.user.updateMany.mockResolvedValue({ count: 0 });
+      prisma.user.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+          code: 'P2002',
+          clientVersion: '7.6.0',
+          meta: { target: ['phone'] },
+        }),
+      );
+
+      await expect(
+        service.updateProfile('user-1', { phone: '0899999999' }),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.subscriber.updateMany).not.toHaveBeenCalled();
     });
   });
 
