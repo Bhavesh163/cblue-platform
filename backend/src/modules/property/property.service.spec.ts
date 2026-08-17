@@ -113,6 +113,39 @@ describe('PropertyService', () => {
       } as never)).rejects.toThrow('GPS location could not be resolved');
       expect(prisma.property.create).not.toHaveBeenCalled();
     });
+    it('treats a foreign default coordinate as stale when administrative location is complete', async () => {
+      prisma.property.create.mockResolvedValue({ id: 'property-foreign-default' });
+
+      await service.create({ id: 'user-1', email: 'owner@example.com' }, {
+        propertyType: 'CONDO',
+        listingType: 'RENT',
+        title: 'Administrative listing from bridge',
+        price: 50000,
+        province: 'Bangkok',
+        district: 'Wang Thonglang',
+        subdistrict: 'Saphan Song',
+        postalCode: '10310',
+        latitude: 37.421998,
+        longitude: -122.084,
+        contactName: 'Owner',
+        contactPhone: '+66812345678',
+        contactEmail: 'owner@example.com',
+      } as never);
+
+      expect(prisma.property.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            locationMode: 'ADMINISTRATIVE',
+            latitude: null,
+            longitude: null,
+            province: 'Bangkok',
+            district: 'Wang Thonglang',
+            subdistrict: 'Saphan Song',
+            postalCode: '10310',
+          }),
+        }),
+      );
+    });
 
   it('persists verified company identity and fixer phone from the authenticated profile', async () => {
     prisma.user.findUnique.mockResolvedValue({
@@ -199,6 +232,43 @@ describe('PropertyService', () => {
       expect(prisma.property.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ locationMode: 'ADMINISTRATIVE', latitude: null, longitude: null }) }));
     });
 
+    it('repairs a legacy foreign default coordinate from a complete administrative edit', async () => {
+      prisma.property.findUnique.mockResolvedValue({
+        id: 'property-legacy',
+        userId: 'user-1',
+        latitude: 37.421998,
+        longitude: -122.084,
+        locationMode: 'GPS',
+      });
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1' });
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.subscriber.findUnique.mockResolvedValue(null);
+      prisma.subscriber.findMany.mockResolvedValue([]);
+      prisma.property.update.mockResolvedValue({ id: 'property-legacy' });
+
+      await service.update('property-legacy', 'user-1', {
+        province: 'Bangkok',
+        district: 'Wang Thonglang',
+        subdistrict: 'Saphan Song',
+        postalCode: '10310',
+        latitude: 37.421998,
+        longitude: -122.084,
+      } as never);
+
+      expect(prisma.property.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            locationMode: 'ADMINISTRATIVE',
+            latitude: null,
+            longitude: null,
+            province: 'Bangkok',
+            district: 'Wang Thonglang',
+            subdistrict: 'Saphan Song',
+            postalCode: '10310',
+          }),
+        }),
+      );
+    });
   describe('search', () => {
     it('should coerce string pagination values before querying Prisma', async () => {
       prisma.property.findMany.mockResolvedValue([]);

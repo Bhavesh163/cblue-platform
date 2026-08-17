@@ -563,6 +563,65 @@ export class PropertyService {
       : PropertyLocationMode.ADMINISTRATIVE;
   }
 
+  private hasCompleteAdministrativeLocation(input: {
+    province?: string | null;
+    district?: string | null;
+    subdistrict?: string | null;
+    postalCode?: string | null;
+  }) {
+    return [
+      input.province,
+      input.district,
+      input.subdistrict,
+      input.postalCode,
+    ].every((value) => String(value || '').trim().length > 0);
+  }
+
+  private isClearlyOutsideThailand(input: {
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+  }) {
+    if (!this.hasValidGpsCoordinates(input)) return false;
+    const latitude = Number(input.latitude);
+    const longitude = Number(input.longitude);
+    return (
+      latitude < 5.5 ||
+      latitude > 20.5 ||
+      longitude < 97 ||
+      longitude > 106.5
+    );
+  }
+
+  private resolveLocationModeForPersistence(
+    existing: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+  ) {
+    if (
+      incoming.locationMode === PropertyLocationMode.GPS ||
+      incoming.locationMode === PropertyLocationMode.ADMINISTRATIVE
+    ) {
+      return this.resolveLocationMode({
+        ...existing,
+        ...incoming,
+      });
+    }
+
+    const hasCompleteAdministrativeInput =
+      this.hasCompleteAdministrativeLocation(incoming);
+    if (
+      hasCompleteAdministrativeInput &&
+      (!this.hasValidGpsCoordinates(incoming) ||
+        this.isClearlyOutsideThailand(incoming))
+    ) {
+      return PropertyLocationMode.ADMINISTRATIVE;
+    }
+
+    return this.resolveLocationMode({
+      ...existing,
+      ...incoming,
+    });
+  }
+
   private assertResolvedGpsLocation(input: {
     latitude?: number | string | null;
     longitude?: number | string | null;
@@ -642,7 +701,10 @@ export class PropertyService {
       }
 
       const normalizedLocation = normalizeThaiGpsLocation(dto);
-      const locationMode = this.resolveLocationMode(dto);
+      const locationMode = this.resolveLocationModeForPersistence(
+        {},
+        dto as unknown as Record<string, unknown>,
+      );
       if (locationMode === PropertyLocationMode.GPS)
         this.assertResolvedGpsLocation({ ...dto, ...normalizedLocation });
 
@@ -1334,7 +1396,10 @@ export class PropertyService {
 
     const { images, ...scalarData } = data;
     const locationInput = { ...property, ...scalarData };
-    const locationMode = this.resolveLocationMode(locationInput);
+    const locationMode = this.resolveLocationModeForPersistence(
+      property as Record<string, unknown>,
+      scalarData as Record<string, unknown>,
+    );
     const normalizedLocation = normalizeThaiGpsLocation(locationInput);
     if (locationMode === PropertyLocationMode.GPS)
       this.assertResolvedGpsLocation({
