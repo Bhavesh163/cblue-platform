@@ -177,6 +177,7 @@ describe('OauthService', () => {
     expect(result.display_name).toBe('Partner User');
     expect(result.expires_in).toBe(900);
     expect(result.access_token).toMatch(/^[^.]+\.[^.]+\.[^.]+$/);
+    expect(result.refresh_token).toBe('opaque-refresh-token');
     expect(result.capabilities).toContain('cblue:workflow:self:read');
     expect(result).not.toHaveProperty('serviceToken');
   });

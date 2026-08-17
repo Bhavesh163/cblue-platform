@@ -159,7 +159,7 @@ export class OauthService {
       capabilities,
     };
 
-    if (this.shouldIssueRefreshToken(dto.scope)) {
+    if (this.shouldIssueRefreshToken(dto.grant_type, dto.scope)) {
       const refresh = await this.refreshSessions.issue({
         userId: user.id,
         clientId: dto.client_id || '',
@@ -554,10 +554,12 @@ export class OauthService {
     return ['CBLUE', 'LBLUE'];
   }
 
-  private shouldIssueRefreshToken(scope?: string) {
+  private shouldIssueRefreshToken(grantType: string, scope?: string) {
     const refreshEnabled =
       this.configService.get<boolean>('oauth.refreshEnabled') === true;
-    return refreshEnabled && scope?.split(/\s+/).includes('offline_access');
+    if (!refreshEnabled) return false;
+    if (grantType === TOKEN_EXCHANGE_GRANT) return true;
+    return scope?.split(/\s+/).includes('offline_access') === true;
   }
 
   private parseBase64Json(value: string) {
