@@ -104,6 +104,15 @@ describe('PropertyService', () => {
       } as never)).rejects.toThrow('GPS location could not be resolved');
       expect(prisma.property.create).not.toHaveBeenCalled();
     });
+    it('rejects inferred GPS mode when coordinates are outside the authoritative location data', async () => {
+      await expect(service.create({ id: 'user-1', email: 'owner@example.com' }, {
+        propertyType: 'CONDO', listingType: 'RENT', title: 'Unresolved BLUE GPS listing', price: 50000,
+        province: '', district: '', subdistrict: '', postalCode: '',
+        latitude: 37.421998, longitude: -122.084,
+        contactName: 'Owner', contactPhone: '+66812345678', contactEmail: 'owner@example.com',
+      } as never)).rejects.toThrow('GPS location could not be resolved');
+      expect(prisma.property.create).not.toHaveBeenCalled();
+    });
 
   it('persists verified company identity and fixer phone from the authenticated profile', async () => {
     prisma.user.findUnique.mockResolvedValue({
@@ -400,6 +409,33 @@ describe('PropertyService', () => {
           }),
         ]),
       );
+    });
+    it('does not expose legacy GPS listings whose coordinates have no authoritative Thai location', async () => {
+      prisma.property.findMany.mockResolvedValue([
+        {
+          id: 'unresolved-blue-listing',
+          userId: 'user-1',
+          propertyType: 'CONDO',
+          listingType: 'RENT',
+          status: 'ACTIVE',
+          title: 'Unresolved BLUE GPS listing',
+          description: '',
+          price: 50000,
+          province: '',
+          district: '',
+          subdistrict: '',
+          postalCode: '',
+          latitude: 37.421998,
+          longitude: -122.084,
+          locationMode: 'GPS',
+          contactEmail: 'owner@cblue.co.th',
+        },
+      ]);
+      prisma.property.count.mockResolvedValue(1);
+
+      const result = await service.search({ limit: '20' } as any);
+
+      expect(result.properties).toEqual([]);
     });
 
     it('should fall back to a legacy-safe property select when newer schema fields are missing', async () => {

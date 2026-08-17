@@ -48,3 +48,15 @@ Use only sanitized status and error codes in logs or issue reports. Do not paste
 ## Regression protection
 
 Keep the route contract tests and OAuth service tests with the backend. Any future change to the global API prefix, OAuth controller paths, token exchange grant, or deployment environment pass-through must update those tests and this runbook in the same CBLUE change.
+
+## Property GPS invariant
+
+CBLUE is the authority for property location persistence and search. A listing with valid GPS coordinates must also have an authoritative province, district, subdistrict, and postal code resolved before it is created or updated. This validation applies when `locationMode` is omitted because coordinates imply GPS.
+
+An unresolved legacy GPS record must not appear in public property search. Do not weaken this filter to make a listing appear. Correct the listing by sending a real Thailand GPS fix that CBLUE can resolve, or use the administrative location selector. The coordinates `37.421998, -122.084000` are not a Thailand property location and must be rejected rather than stored as a searchable listing.
+
+Keep regression coverage for:
+
+- BLUE-created GPS listings with a known Thai coordinate being searchable by province, district, and subdistrict.
+- GPS listings with unknown coordinates being rejected before persistence.
+- Legacy unresolved GPS listings being excluded from public search.

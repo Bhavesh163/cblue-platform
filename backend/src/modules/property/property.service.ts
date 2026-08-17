@@ -104,6 +104,17 @@ export class PropertyService {
   }
 
   private isPublicSearchProperty(property: Record<string, unknown>) {
+    const locationMode = this.normalizeTextValue(property.locationMode)
+      .trim()
+      .toUpperCase();
+    if (
+      locationMode !== 'ADMINISTRATIVE' &&
+      this.hasValidGpsCoordinates(property) &&
+      !this.hasResolvedGpsLocation(property)
+    ) {
+      return false;
+    }
+
     const contactEmail = this.normalizeTextValue(
       property.contactEmail,
     ).toLowerCase();
@@ -133,6 +144,27 @@ export class PropertyService {
       'large body test',
       'test fixer account',
     ].some((phrase) => combined.includes(phrase));
+  }
+
+  private hasResolvedGpsLocation(property: Record<string, unknown>) {
+    const locationInput = {
+      province: this.normalizeTextValue(property.province),
+      district: this.normalizeTextValue(property.district),
+      subdistrict: this.normalizeTextValue(property.subdistrict),
+      postalCode: this.normalizeTextValue(property.postalCode),
+      latitude: this.normalizeTextValue(property.latitude),
+      longitude: this.normalizeTextValue(property.longitude),
+    };
+    const resolved = normalizeThaiGpsLocation(locationInput);
+    return (
+      this.hasValidGpsCoordinates(locationInput) &&
+      Boolean(
+        resolved.province &&
+        resolved.district &&
+        resolved.subdistrict &&
+        resolved.postalCode,
+      )
+    );
   }
 
   private appendLocationFilter(
@@ -535,12 +567,16 @@ export class PropertyService {
     latitude?: number | string | null;
     longitude?: number | string | null;
     province?: string | null;
+    district?: string | null;
     subdistrict?: string | null;
+    postalCode?: string | null;
   }) {
     if (
       !this.hasValidGpsCoordinates(input) ||
       !String(input.province || '').trim() ||
-      !String(input.subdistrict || '').trim()
+      !String(input.district || '').trim() ||
+      !String(input.subdistrict || '').trim() ||
+      !String(input.postalCode || '').trim()
     ) {
       throw new BadRequestException(
         'GPS location could not be resolved. Please detect the location again or select the administrative location.',
@@ -607,7 +643,7 @@ export class PropertyService {
 
       const normalizedLocation = normalizeThaiGpsLocation(dto);
       const locationMode = this.resolveLocationMode(dto);
-      if (dto.locationMode === PropertyLocationMode.GPS)
+      if (locationMode === PropertyLocationMode.GPS)
         this.assertResolvedGpsLocation({ ...dto, ...normalizedLocation });
 
       // Verify the user exists before attempting insert (prevents FK constraint 500)
@@ -1300,7 +1336,7 @@ export class PropertyService {
     const locationInput = { ...property, ...scalarData };
     const locationMode = this.resolveLocationMode(locationInput);
     const normalizedLocation = normalizeThaiGpsLocation(locationInput);
-    if (scalarData.locationMode === PropertyLocationMode.GPS)
+    if (locationMode === PropertyLocationMode.GPS)
       this.assertResolvedGpsLocation({
         ...locationInput,
         ...normalizedLocation,
