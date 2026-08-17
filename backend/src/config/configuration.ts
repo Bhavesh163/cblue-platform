@@ -106,8 +106,10 @@ export default () => ({
   oauth: {
     issuer:
       process.env.CBLUE_OAUTH_ISSUER ||
-      process.env.FRONTEND_URL ||
-      'https://cblue.co.th',
+      process.env.CBLUE_BACKEND_PUBLIC_URL ||
+      (process.env.NODE_ENV === 'production'
+        ? 'http://api-backend.cblue.co.th/api/v1'
+        : process.env.FRONTEND_URL || 'https://cblue.co.th'),
     keyId: process.env.CBLUE_OAUTH_KEY_ID || 'cblue-oauth-key-1',
     privateKeyPem: process.env.CBLUE_OAUTH_PRIVATE_KEY_PEM || '',
     publicKeyPem: process.env.CBLUE_OAUTH_PUBLIC_KEY_PEM || '',
