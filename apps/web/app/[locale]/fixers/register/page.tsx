@@ -3234,10 +3234,10 @@ function FixerRegisterContent() {
           <div className="mb-6 w-full rounded-lg border border-slate-200 bg-slate-50 p-4">
             <label className="block text-sm font-semibold text-slate-800">
               {locale === "th"
-                ? "หนังสือรับรองบริษัท (หากต้องการสมัครในนามบริษัท)"
+                ? "สำหรับสมัครในนามบริษัท 1. อัพโหลดหนังสือรับรองบริษัท (หากต้องการสมัครในนามบริษัท)"
                 : locale === "zh"
-                  ? "公司证明（以公司名义申请时需要）"
-                  : "Company affidavit (required for company applications)"}
+                  ? "公司申请：1. 上传公司证明（以公司名义申请时）"
+                  : "Company applications: 1. Upload the company affidavit (if applying as a company)"}
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
@@ -3260,16 +3260,16 @@ function FixerRegisterContent() {
             )}
             <label className="mt-4 block border-t border-slate-200 pt-4 text-sm font-semibold text-slate-800">
               {locale === "th"
-                ? "หนังสือยืนยันความประสงค์จากกรรมการบริษัท (หากต้องการสมัครในนามบริษัท)"
+                ? "2. อัพโหลดหนังสือยืนยันความประสงค์จากกรรมการบริษัท (หากต้องการสมัครในนามบริษัท)"
                 : locale === "zh"
-                  ? "公司董事申请意向书（以公司名义申请且申请人不是董事时需要）"
-                  : "Director authorization letter (required when a company applicant is not a named director)"}
+                  ? "2. 上传董事意向书（以公司名义申请时）"
+                  : "2. Upload the director letter of intent (if applying as a company)"}
               <span className="mt-1 block text-xs font-normal text-slate-600">
                 {locale === "th"
-                  ? "\u0e43\u0e0a\u0e49\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e2a\u0e21\u0e31\u0e04\u0e23\u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e01\u0e23\u0e23\u0e21\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e21\u0e35\u0e0a\u0e37\u0e48\u0e2d\u0e43\u0e19\u0e2b\u0e19\u0e31\u0e07\u0e2a\u0e37\u0e2d\u0e23\u0e31\u0e1a\u0e23\u0e2d\u0e07 \u0e23\u0e30\u0e1a\u0e38\u0e04\u0e27\u0e32\u0e21\u0e1b\u0e23\u0e30\u0e2a\u0e07\u0e04\u0e4c\u0e2a\u0e21\u0e31\u0e04\u0e23 \u0e1c\u0e39\u0e49\u0e21\u0e35\u0e2d\u0e33\u0e19\u0e32\u0e08\u0e25\u0e07\u0e19\u0e32\u0e21 \u0e41\u0e25\u0e30\u0e2d\u0e35\u0e40\u0e21\u0e25\u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d\u0e02\u0e2d\u0e07\u0e1a\u0e23\u0e34\u0e29\u0e31\u0e17"
+                  ? "ระบุความประสงค์สมัคร ผู้มีอำนาจลงนาม และอีเมลติดต่อของบริษัท"
                   : locale === "zh"
-                    ? "\u7533\u8bf7\u4eba\u4e0d\u662f\u516c\u53f8\u8bc1\u660e\u6240\u5217\u8463\u4e8b\u65f6\u4f7f\u7528\u3002\u8bf7\u6ce8\u660e\u7533\u8bf7\u610f\u5411\u3001\u6388\u6743\u7b7e\u7f72\u4eba\u53ca\u516c\u53f8\u8054\u7cfb\u90ae\u7bb1\u3002"
-                    : "Use this when the applicant is not a director named in the affidavit. Include the applicant's legal name, application intent, authorized signatory, and company contact email."}
+                    ? "请注明申请意向、授权签署人和公司联系邮箱。"
+                    : "State the application intent, authorized signatory, and company contact email."}
               </span>
               <span className="mt-2 block rounded-md bg-white px-3 py-2 text-xs font-normal text-slate-700">
                 {locale === "th"

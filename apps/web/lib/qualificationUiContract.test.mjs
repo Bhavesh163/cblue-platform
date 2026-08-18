@@ -83,15 +83,15 @@ test("partner profile reads authoritative qualification status with Thai and Chi
 test("company-application evidence copy is explicit in all supported languages", async () => {
   const source = await readFile(registerUrl, "utf8");
 
-  assert.match(source, /หนังสือรับรองบริษัท \(หากต้องการสมัครในนามบริษัท\)/);
-  assert.match(source, /公司证明（以公司名义申请时需要）/);
+  assert.match(source, /สำหรับสมัครในนามบริษัท 1\. อัพโหลดหนังสือรับรองบริษัท \(หากต้องการสมัครในนามบริษัท\)/);
+  assert.match(source, /公司申请：1\. 上传公司证明（以公司名义申请时）/);
   assert.match(
     source,
-    /Company affidavit \(required for company applications\)/,
+    /Company applications: 1\. Upload the company affidavit \(if applying as a company\)/,
   );
   assert.match(
     source,
-    /Director authorization letter \(required when a company applicant is not a named director\)/,
+    /2\. Upload the director letter of intent \(if applying as a company\)/,
   );
 });
 
