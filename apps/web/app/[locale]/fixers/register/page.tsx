@@ -3065,7 +3065,7 @@ function FixerRegisterContent() {
                     <button
                       type="button"
                       onClick={startCamera}
-                      className="hidden md:flex items-center gap-2 px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 transition shadow"
+                      className="hidden md:flex cursor-pointer items-center gap-2 px-4 py-2.5 bg-sky-600 text-white rounded-lg text-sm font-semibold hover:bg-sky-700 transition shadow"
                     >
                       📷{" "}
                       {locale === "th"
@@ -3234,14 +3234,14 @@ function FixerRegisterContent() {
           <div className="mb-6 w-full rounded-lg border border-slate-200 bg-slate-50 p-4">
             <label className="block text-sm font-semibold text-slate-800">
               {locale === "th"
-                ? "สำหรับสมัครในนามบริษัท 1. อัพโหลดหนังสือรับรองบริษัท (หากต้องการสมัครในนามบริษัท)"
+                ? "1. อัพโหลดหนังสือรับรองบริษัท (หากต้องการสมัครในนามบริษัท)"
                 : locale === "zh"
                   ? "公司申请：1. 上传公司证明（以公司名义申请时）"
                   : "Company applications: 1. Upload the company affidavit (if applying as a company)"}
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
-                className="mt-2 block w-full text-sm text-slate-600"
+                className="mt-2 block w-full cursor-pointer text-sm text-slate-600 file:cursor-pointer"
                 disabled={companyEvidenceProcessing}
                 onChange={(event) =>
                   void prepareCompanyEvidence(
@@ -3281,7 +3281,7 @@ function FixerRegisterContent() {
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
-                className="mt-2 block w-full text-sm text-slate-600"
+                className="mt-2 block w-full cursor-pointer text-sm text-slate-600 file:cursor-pointer"
                 disabled={companyEvidenceProcessing}
                 onChange={(event) =>
                   void prepareCompanyEvidence(
@@ -3358,7 +3358,7 @@ function FixerRegisterContent() {
                   event.target.value = "";
                   await addPortfolioImages(files);
                 }}
-                className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-800 hover:file:bg-green-100 disabled:opacity-50"
+                className="w-full cursor-pointer text-sm text-gray-500 file:mr-4 file:cursor-pointer file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-800 hover:file:bg-green-100 disabled:opacity-50"
               />
               <p className="mt-2 text-xs text-gray-500">
                 {portfolioImages.length}/{PORTFOLIO_MAX_FILES} files, maximum{" "}
