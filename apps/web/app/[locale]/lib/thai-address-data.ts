@@ -160,3 +160,11 @@ export const THAI_DISTRICTS: Record<string, string[]> = {
 export function getDistrictsForProvince(province: string): string[] {
   return THAI_DISTRICTS[province] || [];
 }
+
+/**
+ * Return the province names in the same catalog used by the address forms.
+ * A fresh array prevents callers from mutating the source map.
+ */
+export function getThaiProvinces(): string[] {
+  return Object.keys(THAI_DISTRICTS);
+}

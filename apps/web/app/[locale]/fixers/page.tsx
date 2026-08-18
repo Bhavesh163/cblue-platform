@@ -88,6 +88,8 @@ import {
   persistPartnerCompletionStatusNote,
   persistPartnerVariationStatusNote,
 } from "../../../lib/workflowLiveReferences";
+import { getDistrictsForProvince, getThaiProvinces } from "../lib/thai-address-data";
+import { getSubdistrictsForDistrict } from "../lib/thai-subdistrict-data";
 
 interface PartnerInfo {
   id?: string;
@@ -15418,6 +15420,33 @@ function PartnerProperties({
     return hints;
   };
 
+  const withCurrentLocationOption = (
+    options: string[],
+    currentValue: unknown,
+  ): string[] => {
+    const current = String(currentValue || "").trim();
+    return current && !options.includes(current) ? [current, ...options] : options;
+  };
+
+  const provinceOptions = editing
+    ? withCurrentLocationOption(getThaiProvinces(), editing.province)
+    : [];
+  const districtOptions = editing
+    ? withCurrentLocationOption(
+        getDistrictsForProvince(String(editing.province || "")),
+        editing.district,
+      )
+    : [];
+  const subdistrictOptions = editing
+    ? withCurrentLocationOption(
+        getSubdistrictsForDistrict(
+          String(editing.province || ""),
+          String(editing.district || ""),
+        ),
+        editing.subdistrict,
+      )
+    : [];
+
   const getQualityScore = (item: any) => {
     const checks = [
       Boolean(String(item?.title || "").trim()),
@@ -17175,63 +17204,119 @@ function PartnerProperties({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  <label
+                    htmlFor="partner-property-edit-province"
+                    className="block text-xs font-semibold text-gray-600 mb-1"
+                  >
                     {locale === "th"
                       ? "จังหวัด"
                       : locale === "zh"
                         ? "省份"
                         : "Province"}
                   </label>
-                  <input
+                  <select
+                    id="partner-property-edit-province"
                     value={editing.province}
                     onChange={(e) =>
                       setEditing((prev: any) => ({
                         ...prev,
                         province: e.target.value,
+                        district: "",
+                        subdistrict: "",
                       }))
                     }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                  >
+                    <option value="">
+                      {locale === "th"
+                        ? "-- เลือกจังหวัด --"
+                        : locale === "zh"
+                          ? "-- 选择省份 --"
+                          : "-- Select Province --"}
+                    </option>
+                    {provinceOptions.map((province) => (
+                      <option key={province} value={province}>
+                        {province}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  <label
+                    htmlFor="partner-property-edit-district"
+                    className="block text-xs font-semibold text-gray-600 mb-1"
+                  >
                     {locale === "th"
                       ? "เขต/อำเภอ"
                       : locale === "zh"
                         ? "区/县"
                         : "District"}
                   </label>
-                  <input
+                  <select
+                    id="partner-property-edit-district"
                     value={editing.district}
+                    disabled={!editing.province}
                     onChange={(e) =>
                       setEditing((prev: any) => ({
                         ...prev,
                         district: e.target.value,
+                        subdistrict: "",
                       }))
                     }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white disabled:cursor-not-allowed disabled:bg-gray-100"
+                  >
+                    <option value="">
+                      {locale === "th"
+                        ? "-- เลือกเขต/อำเภอ --"
+                        : locale === "zh"
+                          ? "-- 选择区/县 --"
+                          : "-- Select District --"}
+                    </option>
+                    {districtOptions.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  <label
+                    htmlFor="partner-property-edit-subdistrict"
+                    className="block text-xs font-semibold text-gray-600 mb-1"
+                  >
                     {locale === "th"
                       ? "แขวง/ตำบล"
                       : locale === "zh"
                         ? "街道/分区"
                         : "Subdistrict"}
                   </label>
-                  <input
+                  <select
+                    id="partner-property-edit-subdistrict"
                     value={editing.subdistrict}
+                    disabled={!editing.district}
                     onChange={(e) =>
                       setEditing((prev: any) => ({
                         ...prev,
                         subdistrict: e.target.value,
                       }))
                     }
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white disabled:cursor-not-allowed disabled:bg-gray-100"
+                  >
+                    <option value="">
+                      {locale === "th"
+                        ? "-- เลือกแขวง/ตำบล --"
+                        : locale === "zh"
+                          ? "-- 选择街道/分区 --"
+                          : "-- Select Subdistrict --"}
+                    </option>
+                    {subdistrictOptions.map((subdistrict) => (
+                      <option key={subdistrict} value={subdistrict}>
+                        {subdistrict}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="sm:col-span-2">
