@@ -319,6 +319,53 @@ describe('SubscriptionService', () => {
     });
   });
 
+  it('registers when the phone is already used by another account', async () => {
+    prismaService.subscriber.findUnique.mockResolvedValue(null);
+    prismaService.subscriber.findFirst.mockResolvedValue(null);
+    prismaService.subscriber.create.mockResolvedValue({
+      id: 'sub-duplicate-phone',
+      email: 'annova@example.com',
+      phone: '0812345678',
+      name: 'Annova',
+      company: null,
+      status: 'ACTIVE',
+      createdAt: new Date(),
+    });
+    prismaService.user.findFirst.mockResolvedValue(null);
+    prismaService.user.create
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Unique constraint failed on phone'), {
+          code: 'P2002',
+          meta: { target: ['phone'] },
+        }),
+      )
+      .mockResolvedValueOnce({ id: 'user-duplicate-phone' });
+
+    const result = await service.register({
+      email: 'annova@example.com',
+      password: 'pass',
+      name: 'Annova',
+      phone: '0812345678',
+    });
+
+    expect(result).toHaveProperty('accessToken');
+    expect(prismaService.user.create).toHaveBeenCalledTimes(2);
+    expect(prismaService.user.create).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: 'annova@example.com',
+          name: 'Annova',
+          subscriberId: 'sub-duplicate-phone',
+          role: 'USER',
+        }),
+      }),
+    );
+    expect(prismaService.user.create.mock.calls[1][0].data).not.toHaveProperty(
+      'phone',
+    );
+  });
+
   describe('login', () => {
     it('should throw unauthorized for wrong password', async () => {
       prismaService.subscriber.findUnique.mockResolvedValue({

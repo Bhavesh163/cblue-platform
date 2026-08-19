@@ -77,6 +77,16 @@ export class SubscriptionService {
       .trim()
       .toLowerCase();
   }
+  private isUniquePhoneConflict(error: unknown) {
+    if (!error || typeof error !== 'object') return false;
+    const candidate = error as { code?: unknown; meta?: { target?: unknown } };
+    if (candidate.code !== 'P2002') return false;
+    const target = candidate.meta?.target;
+    const targets = Array.isArray(target) ? target : [target];
+    return targets.some((value) =>
+      String(value).toLowerCase().includes('phone'),
+    );
+  }
 
   private async findSubscriberByEmail(email?: string | null) {
     const normalizedEmail = this.normalizeEmail(email);
@@ -225,16 +235,33 @@ export class SubscriptionService {
           },
         });
       } else {
-        user = await tx.user.create({
-          data: {
-            email: normalizedEmail,
-            phone: normalizedPhone || undefined,
-            name: dto.name,
-            company: dto.company,
-            subscriberId: subscriber.id,
-            role: 'USER',
-          },
-        });
+        try {
+          user = await tx.user.create({
+            data: {
+              email: normalizedEmail,
+              phone: normalizedPhone || undefined,
+              name: dto.name,
+              company: dto.company,
+              subscriberId: subscriber.id,
+              role: 'USER',
+            },
+          });
+        } catch (error) {
+          if (!this.isUniquePhoneConflict(error)) throw error;
+          this.logger.warn(
+            'Registration user bridge omitted duplicate phone for subscriber ' +
+              subscriber.id,
+          );
+          user = await tx.user.create({
+            data: {
+              email: normalizedEmail,
+              name: dto.name,
+              company: dto.company,
+              subscriberId: subscriber.id,
+              role: 'USER',
+            },
+          });
+        }
       }
 
       return { subscriber, user };
