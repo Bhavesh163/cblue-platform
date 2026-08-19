@@ -233,6 +233,72 @@ describe('SubscriptionService', () => {
       ).rejects.toThrow('Email already registered');
     });
 
+    it('registers when an existing user has a conflicting phone', async () => {
+      prismaService.subscriber.findUnique.mockResolvedValue(null);
+      prismaService.subscriber.findFirst.mockResolvedValue(null);
+      prismaService.subscriber.create.mockResolvedValue({
+        id: 'sub-legacy-user',
+        email: 'legacy-user@example.com',
+        phone: '0812345678',
+        name: 'Legacy User',
+        company: null,
+        status: 'ACTIVE',
+        createdAt: new Date(),
+      });
+      prismaService.user.findFirst.mockResolvedValue({
+        id: 'user-legacy-user',
+        email: 'legacy-user@example.com',
+        phone: null,
+      });
+      prismaService.user.update
+        .mockRejectedValueOnce(
+          Object.assign(new Error('Unique constraint failed on phone'), {
+            code: 'P2002',
+            meta: { target: ['phone'] },
+          }),
+        )
+        .mockResolvedValueOnce({
+          id: 'user-legacy-user',
+          email: 'legacy-user@example.com',
+        });
+
+      const result = await service.register({
+        email: 'legacy-user@example.com',
+        password: 'pass',
+        name: 'Legacy User',
+        phone: '0812345678',
+      });
+
+      expect(result).toHaveProperty('accessToken');
+      expect(prismaService.user.update).toHaveBeenCalledTimes(2);
+      expect(prismaService.user.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: 'user-legacy-user' },
+          data: { subscriberId: 'sub-legacy-user' },
+        }),
+      );
+    });
+
+    it('returns a conflict instead of a 500 for a concurrent email registration', async () => {
+      prismaService.subscriber.findUnique.mockResolvedValue(null);
+      prismaService.subscriber.findFirst.mockResolvedValue(null);
+      prismaService.subscriber.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed on email'), {
+          code: 'P2002',
+          meta: { target: ['email'] },
+        }),
+      );
+
+      await expect(
+        service.register({
+          email: 'race@example.com',
+          password: 'pass',
+          name: 'Race',
+        }),
+      ).rejects.toThrow('Email already registered');
+    });
+
     it('creates a fresh account when a deleted account tombstone retains the email', async () => {
       prismaService.subscriber.findUnique.mockResolvedValue({
         id: 'sub-deleted',

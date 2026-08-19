@@ -77,15 +77,21 @@ export class SubscriptionService {
       .trim()
       .toLowerCase();
   }
-  private isUniquePhoneConflict(error: unknown) {
+  private isUniqueConstraintConflict(error: unknown, field: string): boolean {
     if (!error || typeof error !== 'object') return false;
     const candidate = error as { code?: unknown; meta?: { target?: unknown } };
     if (candidate.code !== 'P2002') return false;
     const target = candidate.meta?.target;
     const targets = Array.isArray(target) ? target : [target];
-    return targets.some((value) =>
-      String(value).toLowerCase().includes('phone'),
-    );
+    return targets.some((value) => String(value).toLowerCase().includes(field));
+  }
+
+  private isUniquePhoneConflict(error: unknown): boolean {
+    return this.isUniqueConstraintConflict(error, 'phone');
+  }
+
+  private isUniqueEmailConflict(error: unknown): boolean {
+    return this.isUniqueConstraintConflict(error, 'email');
   }
 
   private async findSubscriberByEmail(email?: string | null) {
@@ -181,7 +187,7 @@ export class SubscriptionService {
     const passwordHash = await bcrypt.hash(dto.password, this.SALT_ROUNDS);
 
     // Use transaction to ensure Subscriber + User are created atomically
-    const { subscriber, user } = await this.prisma.$transaction(async (tx) => {
+    const transaction = this.prisma.$transaction(async (tx) => {
       if (existing && deletedOwner) {
         const tombstone = `${Date.now()}_${crypto.randomUUID()}`;
         if (deletedOwner.id) {
@@ -227,13 +233,25 @@ export class SubscriptionService {
         },
       });
       if (user) {
-        user = await tx.user.update({
-          where: { id: user.id },
-          data: {
-            subscriberId: subscriber.id,
-            phone: user.phone || normalizedPhone || undefined,
-          },
-        });
+        try {
+          user = await tx.user.update({
+            where: { id: user.id },
+            data: {
+              subscriberId: subscriber.id,
+              phone: user.phone || normalizedPhone || undefined,
+            },
+          });
+        } catch (error) {
+          if (!this.isUniquePhoneConflict(error)) throw error;
+          this.logger.warn(
+            'Registration user bridge update omitted duplicate phone for subscriber ' +
+              subscriber.id,
+          );
+          user = await tx.user.update({
+            where: { id: user.id },
+            data: { subscriberId: subscriber.id },
+          });
+        }
       } else {
         try {
           user = await tx.user.create({
@@ -265,6 +283,12 @@ export class SubscriptionService {
       }
 
       return { subscriber, user };
+    });
+    const { subscriber, user } = await transaction.catch((error: unknown) => {
+      if (this.isUniqueEmailConflict(error)) {
+        throw new ConflictException('Email already registered');
+      }
+      throw error;
     });
 
     const tokens = await this.generateTokenBundle(
