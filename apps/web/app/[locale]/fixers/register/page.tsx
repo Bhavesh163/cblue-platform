@@ -3241,7 +3241,7 @@ function FixerRegisterContent() {
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
-                className="mt-2 block w-full cursor-pointer text-sm text-slate-600 file:cursor-pointer"
+                className="mt-2 block w-full cursor-pointer text-sm text-slate-600 file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-green-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200"
                 disabled={companyEvidenceProcessing}
                 onChange={(event) =>
                   void prepareCompanyEvidence(
@@ -3281,7 +3281,7 @@ function FixerRegisterContent() {
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
-                className="mt-2 block w-full cursor-pointer text-sm text-slate-600 file:cursor-pointer"
+                className="mt-2 block w-full cursor-pointer text-sm text-slate-600 file:mr-4 file:cursor-pointer file:rounded-lg file:border-0 file:bg-green-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-green-800 hover:file:bg-green-200"
                 disabled={companyEvidenceProcessing}
                 onChange={(event) =>
                   void prepareCompanyEvidence(

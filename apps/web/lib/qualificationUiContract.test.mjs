@@ -93,6 +93,7 @@ test("company-application evidence copy is explicit in all supported languages",
     source,
     /2\. Upload the director letter of intent \(if applying as a company\)/,
   );
+  assert.equal((source.match(/file:rounded-lg file:border-0 file:bg-green-100/g) || []).length, 2);
 });
 
 test("first-time registration stages KYC until the fixer profile exists", async () => {
