@@ -77,10 +77,14 @@ export class SubscriptionService {
       .trim()
       .toLowerCase();
   }
-  private isUniqueConstraintConflict(error: unknown, field: string): boolean {
+  private isPrismaErrorCode(error: unknown, code: string): boolean {
     if (!error || typeof error !== 'object') return false;
+    return (error as { code?: unknown }).code === code;
+  }
+
+  private isUniqueConstraintConflict(error: unknown, field: string): boolean {
+    if (!this.isPrismaErrorCode(error, 'P2002')) return false;
     const candidate = error as { code?: unknown; meta?: { target?: unknown } };
-    if (candidate.code !== 'P2002') return false;
     const target = candidate.meta?.target;
     const targets = Array.isArray(target) ? target : [target];
     return targets.some((value) => String(value).toLowerCase().includes(field));
@@ -287,6 +291,9 @@ export class SubscriptionService {
     const { subscriber, user } = await transaction.catch((error: unknown) => {
       if (this.isUniqueEmailConflict(error)) {
         throw new ConflictException('Email already registered');
+      }
+      if (this.isPrismaErrorCode(error, 'P2002')) {
+        throw new ConflictException('Registration details already in use');
       }
       throw error;
     });

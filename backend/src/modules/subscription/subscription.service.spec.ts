@@ -299,6 +299,25 @@ describe('SubscriptionService', () => {
       ).rejects.toThrow('Email already registered');
     });
 
+    it('returns a safe conflict for any remaining registration unique constraint', async () => {
+      prismaService.subscriber.findUnique.mockResolvedValue(null);
+      prismaService.subscriber.findFirst.mockResolvedValue(null);
+      prismaService.subscriber.create.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed on subscriberId'), {
+          code: 'P2002',
+          meta: { target: ['subscriberId'] },
+        }),
+      );
+
+      await expect(
+        service.register({
+          email: 'unique-race@example.com',
+          password: 'pass',
+          name: 'Unique Race',
+        }),
+      ).rejects.toThrow('Registration details already in use');
+    });
+
     it('creates a fresh account when a deleted account tombstone retains the email', async () => {
       prismaService.subscriber.findUnique.mockResolvedValue({
         id: 'sub-deleted',
