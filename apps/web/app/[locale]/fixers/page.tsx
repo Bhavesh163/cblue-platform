@@ -3844,6 +3844,18 @@ export default function FixerProPage() {
               priceList:
                 fixerProfile?.priceList ?? storedPartner?.priceList ?? [],
             };
+          } else {
+            pInfo = {
+              ...pInfo,
+              userId: user.id || storedPartner?.userId,
+              fixerId: undefined,
+              tier: undefined,
+              tierScore: undefined,
+              breakdown: [],
+              flags: [],
+              credentialStatus: undefined,
+              priceList: [],
+            };
           }
 
           setPartner(pInfo);
@@ -9886,6 +9898,8 @@ export default function FixerProPage() {
                 locale={locale}
                 prefix={prefix}
                 partner={partner}
+                isFixer={isFixer}
+                isLister={isLister}
               />
             )}
           </>
@@ -15058,12 +15072,19 @@ function PartnerProfile({
   locale,
   prefix,
   partner,
+  isFixer,
+  isLister,
 }: {
   locale: string;
   prefix: string;
   partner: PartnerInfo | null;
+  isFixer?: boolean;
+  isLister?: boolean;
 }) {
   const router = useRouter();
+  const hasFixerProfile = isFixer === true;
+  const hasPropertyListerProfile = isLister === true && !hasFixerProfile;
+  const hasVerifiedKyc = hasFixerProfile && partner?.credentialStatus === "verified";
   if (!partner) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
@@ -15103,11 +15124,13 @@ function PartnerProfile({
         <div className="flex flex-col md:flex-row gap-8 items-start">
           <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-purple-100 to-indigo-50 flex items-center justify-center shadow-inner flex-shrink-0 relative">
             <span className="text-5xl"></span>
-            <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow">
-              <span className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-full text-xs font-bold">
-                ✓
-              </span>
-            </div>
+            {hasVerifiedKyc && (
+              <div className="absolute -bottom-2 -right-2 bg-white rounded-full p-1 shadow">
+                <span className="w-8 h-8 flex items-center justify-center bg-green-100 text-green-600 rounded-full text-xs font-bold">
+                  ✓
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex-1 w-full">
@@ -15117,15 +15140,35 @@ function PartnerProfile({
                   {partner.name}
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
-                    {partner.tier || "Specialist Tier"}
-                  </span>
-                  <span className="text-xs text-gray-500 flex items-center gap-1">
-                    <span className="text-green-500">✓</span>{" "}
-                    {locale === "th"
-                      ? "ยืนยันตัวตนแล้ว (KYC)"
-                      : "Verified (KYC)"}
-                  </span>
+                  {hasFixerProfile && (
+                    <span className="text-sm font-semibold text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                      {partner.tier ||
+                        (locale === "th"
+                          ? "รออนุมัติระดับ"
+                          : locale === "zh"
+                            ? "等级待审批"
+                            : "Tier pending")}
+                    </span>
+                  )}
+                  {hasPropertyListerProfile && (
+                    <span className="text-sm font-semibold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                      {locale === "th"
+                        ? "ผู้ลงประกาศอสังหาริมทรัพย์"
+                        : locale === "zh"
+                          ? "房源发布者"
+                          : "Property Lister"}
+                    </span>
+                  )}
+                  {hasVerifiedKyc && (
+                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                      <span className="text-green-500">✓</span>{" "}
+                      {locale === "th"
+                        ? "ยืนยันตัวตนแล้ว (KYC)"
+                        : locale === "zh"
+                          ? "已完成身份验证 (KYC)"
+                          : "Verified (KYC)"}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -15188,12 +15231,14 @@ function PartnerProfile({
         </div>
       </div>
 
-      <PartnerQualificationStatus
-        locale={locale}
-        partnerId={partner.id}
-        fallbackTier={partner.tier}
-        fallbackVerified={partner.credentialStatus === "verified"}
-      />
+      {hasFixerProfile && (
+        <PartnerQualificationStatus
+          locale={locale}
+          partnerId={partner.id}
+          fallbackTier={partner.tier}
+          fallbackVerified={partner.credentialStatus === "verified"}
+        />
+      )}
     </div>
   );
 }

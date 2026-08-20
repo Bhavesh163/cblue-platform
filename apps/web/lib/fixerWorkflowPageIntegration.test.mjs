@@ -324,6 +324,16 @@ test("property workflow projection declarations expose location and file helpers
   assert.match(propertyProjectionDeclaration, /propertyFileUrls/);
 });
 
+test("property lister profiles do not inherit fixer tier or KYC badges", () => {
+  assert.match(partnerPage, /tier: undefined/);
+  assert.match(partnerPage, /credentialStatus: undefined/);
+  assert.match(partnerPage, /hasFixerProfile && partner\?\.credentialStatus === "verified"/);
+  assert.match(partnerPage, /hasPropertyListerProfile/);
+  assert.match(partnerPage, /isFixer=\{isFixer\}/);
+  assert.match(partnerPage, /isLister=\{isLister\}/);
+  assert.match(partnerPage, /hasFixerProfile && \(/);
+});
+
 test("customer and partner pages consume the property location/file projection", () => {
   // Summary surfaces (cards, requests, active jobs, chat titles) delegate to
   // propertySummaryLocation; action modals delegate to propertyModalLocation.
