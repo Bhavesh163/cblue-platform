@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type FormEvent, Suspense } from "react";
+import { useState, useCallback, type FormEvent, Suspense } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-
+import ReCaptcha from "../../components/ReCaptcha";
+import PasswordInput from "../../components/PasswordInput";
 
 
 function SubscriptionRegisterPageContent() {
@@ -25,10 +26,14 @@ function SubscriptionRegisterPageContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [pdpaConsent, setPdpaConsent] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState("");
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
+
+  const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
+  const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -64,6 +69,10 @@ function SubscriptionRegisterPageContent() {
       setError(t("passwordMismatch"));
       return;
     }
+    if (!recaptchaToken) {
+      setError(t("recaptchaError"));
+      return;
+    }
     setLoading(true);
     setError("");
 
@@ -78,6 +87,7 @@ function SubscriptionRegisterPageContent() {
           company: form.company,
           password: form.password,
           pdpaConsent: true,
+          recaptchaToken,
         }),
       });
 
@@ -175,7 +185,9 @@ function SubscriptionRegisterPageContent() {
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               {t("password")}
             </label>
-            <input id="password" name="password" type="password" value={form.password} onChange={handleChange}
+            <PasswordInput id="password" name="password" value={form.password} onChange={handleChange}
+              autoComplete="new-password"
+              locale={locale}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="••••••••" />
             <p className="mt-1 text-xs text-gray-400">
@@ -188,7 +200,9 @@ function SubscriptionRegisterPageContent() {
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
               {t("confirmPassword")}
             </label>
-            <input id="confirmPassword" name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange}
+            <PasswordInput id="confirmPassword" name="confirmPassword" value={form.confirmPassword} onChange={handleChange}
+              autoComplete="new-password"
+              locale={locale}
               className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
               placeholder="••••••••" />
           </div>
@@ -206,9 +220,11 @@ function SubscriptionRegisterPageContent() {
             </label>
           </div>
 
+          <ReCaptcha onVerify={handleRecaptcha} onExpire={handleRecaptchaExpire} />
+
           <button
             type="submit"
-            disabled={loading || !pdpaConsent}
+            disabled={loading || !pdpaConsent || !recaptchaToken}
             className="w-full py-2.5 bg-sky-600 text-white font-semibold rounded-lg hover:bg-sky-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {loading ? t("registering") : t("register")}

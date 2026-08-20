@@ -26,6 +26,10 @@ const fixerRegisterPage = readFileSync(
   new URL("../app/[locale]/fixers/register/page.tsx", import.meta.url),
   "utf8",
 );
+const subscriptionRegisterPage = readFileSync(
+  new URL("../app/[locale]/subscription/register/page.tsx", import.meta.url),
+  "utf8",
+);
 const passwordInput = readFileSync(
   new URL("../app/[locale]/components/PasswordInput.tsx", import.meta.url),
   "utf8",
@@ -186,6 +190,10 @@ test("embedded fixer, booking, and property authentication exposes visible passw
   assert.match(passwordInput, /type=\{visible \? "text" : "password"\}/);
   assert.ok((fixerRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
   assert.ok((propertyRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
+  assert.ok((subscriptionRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
+  assert.match(subscriptionRegisterPage, /<ReCaptcha/);
+  assert.match(subscriptionRegisterPage, /recaptchaToken/);
+  assert.match(subscriptionRegisterPage, /!pdpaConsent \\|\\| !recaptchaToken/);
 
   for (const relativePath of [
     "../app/[locale]/booking/household/page.tsx",
