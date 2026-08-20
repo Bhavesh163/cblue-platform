@@ -69,8 +69,9 @@ export class FixerController {
   // ── AI Digest (no auth — called during registration before user has token) ──
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
-  getMyProfile(@CurrentUser('id') userId: string) {
+  @UseGuards(OptionalJwtAuthGuard)
+  getMyProfile(@CurrentUser('id') userId?: string) {
+    if (!userId) return null;
     return this.fixerService.getMyFixerProfile(userId);
   }
 
