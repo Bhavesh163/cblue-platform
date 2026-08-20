@@ -87,7 +87,6 @@ function SubscriptionRegisterPageContent() {
           company: form.company,
           password: form.password,
           pdpaConsent: true,
-          recaptchaToken,
         }),
       });
 

@@ -194,6 +194,11 @@ test("embedded fixer, booking, and property authentication exposes visible passw
   assert.match(subscriptionRegisterPage, /<ReCaptcha/);
   assert.match(subscriptionRegisterPage, /recaptchaToken/);
   assert.match(subscriptionRegisterPage, /!pdpaConsent \\|\\| !recaptchaToken/);
+  const registrationRequest = subscriptionRegisterPage.slice(
+    subscriptionRegisterPage.indexOf("body: JSON.stringify("),
+    subscriptionRegisterPage.indexOf("      });", subscriptionRegisterPage.indexOf("body: JSON.stringify(")),
+  );
+  assert.doesNotMatch(registrationRequest, /recaptchaToken/);
 
   for (const relativePath of [
     "../app/[locale]/booking/household/page.tsx",
