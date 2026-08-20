@@ -169,7 +169,7 @@ function SubscriptionLoginPageContent() {
                   </svg>
                 ) : (
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.5,12 C4,8 7.5,5 12,5 C16.5,5 20,8 21.5,12 C20,16 16.5,19 12,19 C7.5,19 4,16 2.5,12 Z" />
                     <circle cx="12" cy="12" r="3" />
                   </svg>
                 )}
