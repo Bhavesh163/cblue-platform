@@ -14,6 +14,8 @@ CBLUE owns these versioned endpoints on the backend origin:
 
 The token endpoint accepts the BLUE RFC 8693 token exchange. It must validate the configured client, audience, subject token, and subject token type before issuing CBLUE access and refresh tokens. Never bypass that validation to hide a client re-authentication symptom.
 
+The successful token and refresh responses must retain both `legacy_subject_id` and `subject_id`, with each set to the authoritative CBLUE user ID. BLUE consumes `legacy_subject_id` when persisting the exchanged CBLUE session. Removing or renaming that field causes a valid exchange to be discarded and sends the customer back through the reconnect flow.
+
 ## Production configuration
 
 Configure these values in the backend runtime and GitHub Actions environment. Keep secrets out of source control and logs:
@@ -41,7 +43,8 @@ After any change to `main`, verify the following against the actual backend orig
 2. The discovery `jwks_uri` and `token_endpoint` use the same public API base.
 3. An unauthenticated token request is rejected with HTTP 400/401 and a sanitized error.
 4. A credentialed BLUE exchange returns HTTP 200 with access, refresh, and expiry fields.
-5. BLUE can contact a CBLUE property lister without a second password prompt.
+5. The exchange and refresh responses include `legacy_subject_id` mapped to the authoritative CBLUE user.
+6. BLUE can contact a CBLUE property lister without a second password prompt.
 
 Use only sanitized status and error codes in logs or issue reports. Do not paste client secrets, private keys, bearer tokens, or identity evidence into tickets.
 

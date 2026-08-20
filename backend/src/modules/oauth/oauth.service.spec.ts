@@ -172,6 +172,7 @@ describe('OauthService', () => {
     });
 
     expect(result.token_type).toBe('Bearer');
+    expect(result.legacy_subject_id).toBe('user-1');
     expect(result.subject_id).toBe('user-1');
     expect(result.email).toBe('partner@example.com');
     expect(result.display_name).toBe('Partner User');
@@ -251,6 +252,8 @@ describe('OauthService', () => {
       audience: 'CBLUE',
     });
     expect(result.refresh_token).toBe('rotated-refresh-token');
+    expect(result.legacy_subject_id).toBe('user-1');
+    expect(result.subject_id).toBe('user-1');
     expect(result.capabilities).toContain('cblue:fixer:workflow:write');
   });
 
@@ -356,6 +359,7 @@ describe('OauthService', () => {
       client_secret: 'blue-secret',
     });
 
+    expect(result.legacy_subject_id).toBe('linked-user');
     expect(result.subject_id).toBe('linked-user');
     expect(prisma.user.findUnique).toHaveBeenCalledWith(
       expect.objectContaining({
