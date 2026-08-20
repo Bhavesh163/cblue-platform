@@ -191,6 +191,13 @@ test("embedded fixer, booking, and property authentication exposes visible passw
   assert.ok((fixerRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
   assert.ok((propertyRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
   assert.ok((subscriptionRegisterPage.match(/<PasswordInput/g) || []).length >= 2);
+  assert.match(propertyRegisterPage, /<ReCaptcha/);
+  assert.match(propertyRegisterPage, /!recaptchaToken/);
+  const propertyPayload = propertyRegisterPage.slice(
+    propertyRegisterPage.indexOf("const payload = {"),
+    propertyRegisterPage.indexOf("const submitListing", propertyRegisterPage.indexOf("const payload = {")),
+  );
+  assert.doesNotMatch(propertyPayload, /recaptchaToken/);
   assert.match(subscriptionRegisterPage, /<ReCaptcha/);
   assert.match(subscriptionRegisterPage, /recaptchaToken/);
   assert.match(subscriptionRegisterPage, /!pdpaConsent \\|\\| !recaptchaToken/);

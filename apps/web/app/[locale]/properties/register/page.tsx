@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, useCallback, FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useTranslations, useLocale } from "next-intl";
@@ -10,6 +10,7 @@ import { getSubdistrictsForDistrict, lookupByPostalCode } from "../../lib/thai-s
 import GpsDetectButton from "../../components/GpsDetectButton";
 import GpsResolvedLocation from "../../components/GpsResolvedLocation";
 import PasswordInput from "../../components/PasswordInput";
+import ReCaptcha from "../../components/ReCaptcha";
 import { normalizeGpsAddressForSubmit } from "../../lib/gps-location-normalization";
 import { clearSubscriberSession, fetchWithSubscriberSession, refreshSubscriberSession } from "../../../../lib/subscriberSession";
 const PROPERTY_TYPES = ["CONDO", "HOUSE", "TOWNHOUSE", "LAND", "COMMERCIAL", "APARTMENT", "OFFICE", "WAREHOUSE", "SHOPHOUSE"] as const;
@@ -52,6 +53,8 @@ export default function PropertyRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [consentChecked, setConsentChecked] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState("");
+  const [recaptchaResetKey, setRecaptchaResetKey] = useState(0);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationType, setLocationType] = useState<"gps" | "dropdown" | "address">("dropdown");
   const [subscriber, setSubscriber] = useState<AuthenticatedContact | null>(null);
@@ -59,6 +62,9 @@ export default function PropertyRegisterPage() {
   const [profileRetryKey, setProfileRetryKey] = useState(0);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [propImages, setPropImages] = useState<File[]>([]);
+  const handleRecaptcha = useCallback((token: string) => setRecaptchaToken(token), []);
+  const handleRecaptchaExpire = useCallback(() => setRecaptchaToken(""), []);
+
   const sessionExpiredMessage = locale === "th"
     ? "เซสชันหมดอายุ กรุณาเข้าสู่ระบบอีกครั้งแล้วส่งรายการใหม่"
     : locale === "zh"
@@ -361,6 +367,11 @@ export default function PropertyRegisterPage() {
       return;
     }
 
+    if (!recaptchaToken) {
+      setError(tb("recaptchaError"));
+      return;
+    }
+
     if (!form.propertyType || !form.listingType || !form.title || !form.price ||
         (locationType !== "gps" && !form.province) ||
         (locationType === "gps" && !gpsCoords)) {
@@ -556,6 +567,8 @@ export default function PropertyRegisterPage() {
       }
 
       if (res.ok) {
+        setRecaptchaToken("");
+        setRecaptchaResetKey((current) => current + 1);
         setSubmitted(true);
       } else {
         const contentType = res.headers.get("content-type") || "";
@@ -594,7 +607,7 @@ export default function PropertyRegisterPage() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">{locale === "th" ? "ลงประกาศสำเร็จ" : "Listing Published"}</h2>
           <p className="text-gray-600 mb-8">{locale === "th" ? "อสังหาริมทรัพย์ของคุณได้รับการเผยแพร่ในระบบแล้ว ผู้เช่าหรือผู้ซื้อสามารถติดต่อคุณได้ทันที" : "Your property is now live and visible to potential tenants or buyers."}</p>
           <div className="flex gap-4 justify-center">
-            <button onClick={() => { setSubmitted(false); setForm({
+            <button onClick={() => { setSubmitted(false); setRecaptchaToken(""); setRecaptchaResetKey((current) => current + 1); setForm({
       propertyType: "", listingType: "", tier: "STANDARD", title: "", description: "", price: "", area: "",
       bedrooms: "", bathrooms: "", floors: "", yearBuilt: "", houseNumber: "", floor: "", building: "", road: "", soi: "",
       province: "", district: "", subdistrict: "", postalCode: "", addressLine: "",
@@ -1156,13 +1169,19 @@ export default function PropertyRegisterPage() {
                 </span>
               </label>
 
+              <ReCaptcha
+                resetKey={recaptchaResetKey}
+                onVerify={handleRecaptcha}
+                onExpire={handleRecaptchaExpire}
+              />
+
               {error && (
                 <div className="mt-3 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>
               )}
 
               <button
                 type="submit"
-                disabled={submitting || profileSessionState === "checking" || profileSessionState === "unavailable"}
+                disabled={submitting || profileSessionState === "checking" || profileSessionState === "unavailable" || !recaptchaToken}
                 className="mt-5 w-full py-3 px-6 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 disabled:bg-gray-400 rounded-xl transition-colors"
               >
                 {submitting ? tb("submitting") : t("submitListing")}
