@@ -63,3 +63,21 @@ Keep regression coverage for:
 - BLUE-created GPS listings with a known Thai coordinate being searchable by province, district, and subdistrict.
 - GPS listings with unknown coordinates being rejected before persistence.
 - Legacy unresolved GPS listings being excluded from public search.
+## Contact lister incident record
+
+Resolved on 2026-08-21 in CBLUE commit `a51bb7a`. The BLUE Contact Lister action had been returning HTTP 401 with `BLUE bridge is not configured`, which BLUE correctly displayed as a temporary lister-service failure. The cause was a circular NestJS dependency between `BlueBridgeService` and `PropertyWorkflowBridgeService`: both providers used optional constructor injection, so the property workflow provider could be undefined at runtime even though both providers were registered in `BlueBridgeModule`.
+
+The permanent fix uses explicit `forwardRef` injection in both services and a provider-wiring regression test. Do not replace either injection with unqualified optional injection or remove the test. A valid authenticated request to `POST /api/v1/blue/property-workflow/inquiries` must reach bridge-key validation and return HTTP 201 with the authoritative property snapshot when the BLUE bearer token and bridge key are valid.
+
+Post-release verification completed:
+
+- CBLUE health endpoint returned HTTP 200.
+- A credential-free probe with an intentionally invalid bridge key returned HTTP 401 `Invalid BLUE bridge key`, proving the bridge provider was initialized and the configured-key check was reached.
+- Backend tests, build, container deployment, and web deployment passed.
+
+When this symptom recurs, check these signals in order:
+
+1. Confirm the deployed CBLUE image contains the bridge provider-wiring fix and the DI regression test remains present.
+2. Confirm BLUE and CBLUE use the same `CBLUE_BRIDGE_API_KEY` through their secret managers. Compare secret metadata or fingerprints through a secure operator channel; never print the secret, bearer token, or identity evidence.
+3. Retry with a real authenticated CBLUE customer bearer token and the property `listingId` returned by `GET /api/v1/blue/property-workflow/listings`.
+4. Treat `BLUE bridge is not configured` as a deployment regression. Treat `Invalid BLUE bridge key` as a secret mismatch or stale runtime. Do not hide either condition with a reconnect or password prompt.
