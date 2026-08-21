@@ -678,6 +678,40 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
   }
 };
 
+const viewCustomerFile = async (rawUrl: string, fallbackName: string): Promise<boolean> => {
+  const url = normalizeImageUrl(rawUrl);
+  if (!url) return false;
+  if (
+    url.startsWith("data:") ||
+    url.startsWith("blob:") ||
+    ((url.startsWith("http://") || url.startsWith("https://")) &&
+      !shouldAttachAuthHeader(url))
+  ) {
+    openUrlInNewTab(url);
+    return true;
+  }
+  const popup = typeof window !== "undefined" ? window.open("", "_blank") : null;
+  try {
+    const token = getCustomerDashboardToken();
+    const headers: Record<string, string> = {};
+    if (token && shouldAttachAuthHeader(url)) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const response = await fetch(url, { headers, credentials: "include" });
+    if (!response.ok) throw new Error("File request failed");
+    const blobUrl = URL.createObjectURL(await response.blob());
+    if (popup && !popup.closed) {
+      popup.location.href = blobUrl;
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      return true;
+    }
+    triggerDownload(blobUrl, fallbackName, true);
+    return true;
+  } catch {
+    if (popup && !popup.closed) popup.close();
+    return false;
+  }
+};
 function CustomerWorkflowModalMeta({
   locale = "en",
   step,
@@ -1630,6 +1664,10 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
   const [propInquiries, setPropInquiries] = useState<PropInquiry[]>([]);
   const lastKnownBackendOrderPosRef = useRef<Set<string>>(new Set());
   const [propPayModal, setPropPayModal] = useState<PropInquiry | null>(null);
+  interface PropInquiry {
+    attachments?: Array<{ url?: string; key?: string } | string>;
+    uploadedFiles?: Array<{ url?: string; key?: string } | string>;
+  }
   const [propMeetingModal, setPropMeetingModal] = useState<PropInquiry | null>(null);
   const [propModalImages, setPropModalImages] = useState<string[]>([]);
   const [propMeetingDate, setPropMeetingDate] = useState("");
@@ -1648,7 +1686,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
     cancelJobModal ||
     propPayModal ||
     propMeetingModal ||
-    propRateModal,
+    propRateModal ||
+    propViewFilesModal,
   );
 
   useEffect(() => {
@@ -2248,6 +2287,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
             .map((image: any) => normalizeImageUrl(extractImageUrlCandidate(image)))
             .filter(Boolean)
         : [];
+      const inquiryAttachments = Array.isArray(api?.attachments) ? api.attachments : [];
+      const apiUploadedFiles = Array.isArray(api?.uploadedFiles) ? api.uploadedFiles : [];
       const createdAtTs = new Date(api?.createdAt || 0).getTime();
       const updatedAtTs = new Date(api?.updatedAt || api?.createdAt || 0).getTime();
       const createdAt = Number.isFinite(createdAtTs) && createdAtTs > 0 ? createdAtTs : Date.now();
@@ -2267,6 +2308,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
         bedrooms: typeof api.property?.bedrooms === 'number' ? api.property.bedrooms : null,
         bathrooms: typeof api.property?.bathrooms === 'number' ? api.property.bathrooms : null,
         propertyImages,
+        attachments: inquiryAttachments,
+        uploadedFiles: apiUploadedFiles,
         customerEmail: api.customerEmail,
         customerName: api.customerName, listerName: api.listerName, status: api.status, step: api.step,
         createdAt,
@@ -5709,23 +5752,31 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
       {propViewFilesModal && (() => {
         const files = propertyFileUrls(propViewFilesModal).map(normalizeImageUrl).filter(Boolean);
         return (
-          <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-6 bg-gray-950/80 backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-y-auto max-h-[calc(100dvh-6rem)] mx-auto">
-              <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4 flex justify-between items-center">
+          <div role="dialog" aria-modal="true" className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-950/80 backdrop-blur-sm p-4 overscroll-contain">
+            <div className="w-full max-w-2xl max-h-[calc(100dvh-2rem)] bg-white rounded-3xl shadow-xl flex flex-col overflow-hidden mx-auto">
+              <div className="bg-gradient-to-r from-sky-500 to-blue-500 px-6 py-4 flex justify-between items-center shrink-0">
                 <div>
                   <h3 className="text-white font-bold text-lg">{locale === 'th' ? 'ดูไฟล์' : locale === 'zh' ? '查看文件' : 'View Files'}</h3>
                   <p className="text-sky-100 text-sm mt-1">{propViewFilesModal.poNumber} · {propViewFilesModal.propertyTitle || (locale === 'th' ? 'อสังหาริมทรัพย์' : locale === 'zh' ? '房产' : 'Property')}</p>
                 </div>
                 <button onClick={() => setPropViewFilesModal(null)} className="text-white/90 hover:text-white text-xl leading-none" aria-label="Close">&times;</button>
               </div>
-              <div className="px-6 py-5 space-y-3">
+              <div className="px-6 py-5 space-y-3 min-h-0 flex-1 overflow-y-auto">
                 {files.length > 0 ? (
                   <>
                     <div className="flex flex-wrap gap-2">
                       {files.map((url, i) => (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-3 py-1 hover:bg-sky-100 transition">
-                          {locale === 'th' ? `ไฟล์ ${i + 1}` : locale === 'zh' ? `文件 ${i + 1}` : `File ${i + 1}`} ↗
-                        </a>
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={async () => {
+                            const opened = await viewCustomerFile(url, `property-${propViewFilesModal.poNumber}-${i + 1}`);
+                            if (!opened) alert(locale === 'th' ? 'ไม่สามารถเปิดไฟล์ได้ในขณะนี้' : locale === 'zh' ? '暂时无法打开文件' : 'This file is temporarily unavailable.');
+                          }}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-3 py-1 hover:bg-sky-100 transition"
+                        >
+                          {locale === 'th' ? `เปิดไฟล์ ${i + 1}` : locale === 'zh' ? `打开文件 ${i + 1}` : `View file ${i + 1}`}
+                        </button>
                       ))}
                     </div>
                     <button
