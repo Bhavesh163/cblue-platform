@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  forwardRef,
+  Inject,
   Injectable,
   Optional,
   NotFoundException,
@@ -111,6 +113,7 @@ export class BlueBridgeService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     @Optional()
+    @Inject(forwardRef(() => PropertyWorkflowBridgeService))
     private readonly propertyWorkflow?: PropertyWorkflowBridgeService,
   ) {}
 

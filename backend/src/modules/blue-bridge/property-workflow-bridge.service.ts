@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
   Optional,
@@ -64,7 +66,9 @@ export class PropertyWorkflowBridgeService {
     private readonly prisma: PrismaService,
     private readonly propertyService: PropertyService,
     private readonly propertyInquiryService?: PropertyInquiryService,
-    @Optional() private readonly bridge?: BlueBridgeService,
+    @Optional()
+    @Inject(forwardRef(() => BlueBridgeService))
+    private readonly bridge?: BlueBridgeService,
   ) {}
 
   async listings(query: PropertyWorkflowListingQueryDto) {
