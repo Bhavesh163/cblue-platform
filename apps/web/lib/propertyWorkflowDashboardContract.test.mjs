@@ -37,7 +37,13 @@ test("preserves direct customer inquiry attachments for the active-job viewer", 
 });
 
 test("locks and bounds the customer property file modal", () => {
-  assert.match(dashboardSource, /propRateModal,\s+propViewFilesModal,/);
+  assert.match(dashboardSource, /propRateModal\s+\|\|\s+propViewFilesModal,/);
   assert.match(dashboardSource, /role="dialog" aria-modal="true"/);
   assert.match(dashboardSource, /max-h-\[calc\(100dvh-2rem\)\].*flex flex-col overflow-hidden/);
+});
+test("uses resilient customer file access for viewing and downloading", () => {
+  assert.match(dashboardSource, /const decodeDataUrlToBlob =/);
+  assert.match(dashboardSource, /const fetchCustomerFile = /);
+  assert.match(dashboardSource, /const downloadCustomerFile = async/);
+  assert.match(dashboardSource, /Download file/);
 });

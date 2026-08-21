@@ -607,6 +607,38 @@ const openUrlInNewTab = (url: string) => {
   link.click();
   document.body.removeChild(link);
 };
+const decodeDataUrlToBlob = (value: string): Blob | null => {
+  const normalized = normalizeImageUrl(value);
+  if (!normalized.startsWith('data:')) return null;
+  const commaIndex = normalized.indexOf(',');
+  if (commaIndex <= 0) return null;
+  const mimeType = mimeTypeFromDataUrl(normalized) || 'application/octet-stream';
+  let payload = normalized.slice(commaIndex + 1).replace(/\s+/g, '');
+  if (!payload) return null;
+  payload = payload.replace(/[^A-Za-z0-9+/=]/g, '');
+  if (!payload) return null;
+  const remainder = payload.length % 4;
+  if (remainder !== 0) payload = `${payload}${'='.repeat(4 - remainder)}`;
+  try {
+    const binary = atob(payload);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mimeType });
+  } catch {
+    return null;
+  }
+};
+const openBlobInNewTab = (blob: Blob) => {
+  const blobUrl = URL.createObjectURL(blob);
+  openUrlInNewTab(blobUrl);
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+};
+const fetchCustomerFile = (url: string) =>
+  fetchWithSubscriberSession(
+    url,
+    { credentials: 'include' },
+    getCustomerDashboardToken(),
+  );
 const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
   const uniqueUrls = Array.from(new Set((urls || []).map(normalizeImageUrl).filter(Boolean)));
   for (const [index, url] of uniqueUrls.entries()) {
@@ -620,6 +652,11 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
       if (url.startsWith('data:')) {
         const ext = extensionFromMimeType(mimeTypeFromDataUrl(url));
         const fileName = `${fallbackName}.${ext}`;
+        const decodedBlob = decodeDataUrlToBlob(url);
+        if (decodedBlob) {
+          triggerDownload(URL.createObjectURL(decodedBlob), fileName, true);
+          continue;
+        }
         try {
           // Preserve direct click gesture for data URL downloads.
           triggerDownload(url, fileName);
@@ -635,16 +672,10 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
         continue;
       }
 
-      const token = getCustomerDashboardToken();
-      const headers: Record<string, string> = {};
-      if (token && shouldAttachAuthHeader(url)) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-      const response = await fetch(url, {
-        credentials: 'include',
-        headers,
-      });
-      if (!response.ok) {
+      const response = shouldAttachAuthHeader(url)
+        ? await fetchCustomerFile(url)
+        : await fetch(url, { credentials: 'include' });
+      if (!response || !response.ok) {
         if (url.startsWith('http://') || url.startsWith('https://')) {
           openUrlInNewTab(url);
         } else if (!shouldAttachAuthHeader(url)) {
@@ -677,28 +708,62 @@ const downloadImageUrls = async (urls: string[], prefix = 'property-photo') => {
     }
   }
 };
+const downloadCustomerFile = async (rawUrl: string, fallbackName: string): Promise<boolean> => {
+  const url = normalizeImageUrl(rawUrl);
+  if (!url) return false;
+  if (url.startsWith('blob:')) {
+    triggerDownload(url, fallbackName);
+    return true;
+  }
+  if (url.startsWith('data:')) {
+    const blob = decodeDataUrlToBlob(url);
+    if (!blob) return false;
+    const ext = extensionFromMimeType(blob.type);
+    const fileName = fallbackName.includes('.') ? fallbackName : `${fallbackName}.${ext}`;
+    triggerDownload(URL.createObjectURL(blob), fileName, true);
+    return true;
+  }
+  if ((url.startsWith('http://') || url.startsWith('https://')) && !shouldAttachAuthHeader(url)) {
+    openUrlInNewTab(url);
+    return true;
+  }
+  try {
+    const response = await fetchCustomerFile(url);
+    if (!response || !response.ok) return false;
+    const blob = await response.blob();
+    const ext = extensionFromMimeType(blob.type);
+    const fileName = fallbackName.includes('.') ? fallbackName : `${fallbackName}.${ext}`;
+    triggerDownload(URL.createObjectURL(blob), fileName, true);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const viewCustomerFile = async (rawUrl: string, fallbackName: string): Promise<boolean> => {
   const url = normalizeImageUrl(rawUrl);
   if (!url) return false;
-  if (
-    url.startsWith("data:") ||
-    url.startsWith("blob:") ||
-    ((url.startsWith("http://") || url.startsWith("https://")) &&
-      !shouldAttachAuthHeader(url))
-  ) {
+  if (url.startsWith('blob:')) {
+    openUrlInNewTab(url);
+    return true;
+  }
+  if (url.startsWith('data:')) {
+    const blob = decodeDataUrlToBlob(url);
+    if (blob) {
+      openBlobInNewTab(blob);
+      return true;
+    }
+    openUrlInNewTab(url);
+    return true;
+  }
+  if ((url.startsWith('http://') || url.startsWith('https://')) && !shouldAttachAuthHeader(url)) {
     openUrlInNewTab(url);
     return true;
   }
   const popup = typeof window !== "undefined" ? window.open("", "_blank") : null;
   try {
-    const token = getCustomerDashboardToken();
-    const headers: Record<string, string> = {};
-    if (token && shouldAttachAuthHeader(url)) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    const response = await fetch(url, { headers, credentials: "include" });
-    if (!response.ok) throw new Error("File request failed");
+    const response = await fetchCustomerFile(url);
+    if (!response || !response.ok) throw new Error("File request failed");
     const blobUrl = URL.createObjectURL(await response.blob());
     if (popup && !popup.closed) {
       popup.location.href = blobUrl;
@@ -5766,8 +5831,8 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                   <>
                     <div className="flex flex-wrap gap-2">
                       {files.map((url, i) => (
-                        <button
-                          key={i}
+                        <div key={i} className="flex flex-wrap gap-2">
+                          <button
                           type="button"
                           onClick={async () => {
                             const opened = await viewCustomerFile(url, `property-${propViewFilesModal.poNumber}-${i + 1}`);
@@ -5777,6 +5842,17 @@ function CustomerDashboard({ locale, subscriber, prefix, onLogout, orders, hasFe
                         >
                           {locale === 'th' ? `เปิดไฟล์ ${i + 1}` : locale === 'zh' ? `打开文件 ${i + 1}` : `View file ${i + 1}`}
                         </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const downloaded = await downloadCustomerFile(url, `property-${propViewFilesModal.poNumber}-${i + 1}`);
+                          if (!downloaded) alert(locale === 'th' ? 'ไม่สามารถดาวน์โหลดไฟล์ได้ในขณะนี้' : locale === 'zh' ? '暂时无法下载文件' : 'This file cannot be downloaded right now.');
+                        }}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-sky-600 border border-sky-600 rounded-full px-3 py-1 hover:bg-sky-700 transition"
+                      >
+                        {locale === 'th' ? `ดาวน์โหลด ${i + 1}` : locale === 'zh' ? `下载文件 ${i + 1}` : `Download file ${i + 1}`}
+                      </button>
+                        </div>
                       ))}
                     </div>
                     <button
