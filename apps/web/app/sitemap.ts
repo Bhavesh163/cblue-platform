@@ -20,6 +20,8 @@ const staticRoutes = [
   { path: "/support-us", priority: 0.5, changeFrequency: "monthly" as const },
   { path: "/terms", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/privacy", priority: 0.3, changeFrequency: "yearly" as const },
+  { path: "/refund-policy", priority: 0.3, changeFrequency: "yearly" as const },
+  { path: "/retention-policy", priority: 0.3, changeFrequency: "yearly" as const },
   { path: "/subscription/login", priority: 0.5, changeFrequency: "monthly" as const },
   { path: "/subscription/register", priority: 0.5, changeFrequency: "monthly" as const },
 ];

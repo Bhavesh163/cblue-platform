@@ -126,9 +126,17 @@ export default function PrivacyPage() {
             </div>
           ))}
           <div className="text-center pt-4">
-            <Link href={`${prefix}/terms`} className="text-sm text-emerald-600 hover:underline">
-              {locale === "th" ? "ดูข้อกำหนดการใช้บริการ →" : locale === "zh" ? "查看服务条款 →" : "View Terms of Service →"}
-            </Link>
+            <div className="flex flex-wrap justify-center gap-4 text-sm">
+              <Link href={`${prefix}/terms`} className="text-emerald-600 hover:underline">
+                {locale === "th" ? "ข้อกำหนดการใช้บริการ" : locale === "zh" ? "服务条款" : "Terms of Use"}
+              </Link>
+              <Link href={`${prefix}/refund-policy`} className="text-emerald-600 hover:underline">
+                {locale === "th" ? "นโยบายการคืนเงิน" : locale === "zh" ? "退款政策" : "Refund Policy"}
+              </Link>
+              <Link href={`${prefix}/retention-policy`} className="text-emerald-600 hover:underline">
+                {locale === "th" ? "นโยบายการเก็บรักษาข้อมูล" : locale === "zh" ? "数据保留政策" : "Data Retention Policy"}
+              </Link>
+            </div>
           </div>
         </div>
       </section>

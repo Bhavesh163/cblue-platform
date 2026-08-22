@@ -12,7 +12,7 @@ const T: Record<string, Record<string, string>> = {
     s2t: "2. Services Provided",
     s2: "Cblue or blue provides a marketplace platform connecting customers with certified fixers, professionals, and real estate service providers across Thailand. Our services include:\n• Household maintenance booking (Plumbing, Electrical, AC, Interior, Landscaping, Gardening, Cladding/Roofing)\n• Project services (Website Dev, AI, Solar, Smart Building, Green Construction, etc.)\n• Professional services (Lawyers, Architects, Engineers, Accountants, etc.)\n• Real estate listing and search (Condo, House, Townhouse, Land, Commercial, Apartment)",
     s3t: "3. User Accounts & Registration",
-    s3: "Users must provide accurate and complete information during registration. You are responsible for maintaining the confidentiality of your account credentials. Cblue or blue reserves the right to suspend or terminate accounts that violate these terms or engage in fraudulent activity.",
+    s3: "Users must provide accurate and complete information during registration. You are responsible for maintaining the confidentiality of your account credentials. Acceptable use requires lawful, honest, and respectful use of the platform; do not submit false information, misuse communications or files, interfere with service operation, attempt unauthorized access, or use CBLUE for unlawful, fraudulent, abusive, or harmful activity. Cblue or blue reserves the right to suspend or terminate accounts that violate these terms or engage in fraudulent activity.",
     s4t: "4. Booking & Payment",
     s4: "When you book a fixer or professional, a processing fee is required based on the selected tier:\n• Economy: ฿100\n• Standard: ฿400\n• Corporate / Upper: ฿600\n• Specialist / Manager / Luxury: ฿800\n• Expert / Director / Grandeur: ฿1,000\n\nPayments are processed via PromptPay QR. All fees are non-refundable once the fixer/professional has confirmed the booking, except where required by applicable law.",
     s5t: "5. Fixer & Professional Obligations",
@@ -46,7 +46,7 @@ const T: Record<string, Record<string, string>> = {
     s2t: "2. บริการที่ให้",
     s2: "Cblue or blue เป็นแพลตฟอร์มตลาดกลางที่เชื่อมต่อลูกค้ากับช่าง มืออาชีพ และผู้ให้บริการอสังหาริมทรัพย์ที่ได้รับการรับรองทั่วประเทศไทย บริการของเราประกอบด้วย:\n• การจองบำรุงรักษาบ้าน (ประปา ไฟฟ้า แอร์ ตกแต่งภายใน จัดสวน ทำสวน หลังคา/ผนัง)\n• บริการโครงการ (พัฒนาเว็บ AI โซลาร์ อาคารอัจฉริยะ ก่อสร้างสีเขียว ฯลฯ)\n• บริการมืออาชีพ (ทนายความ สถาปนิก วิศวกร นักบัญชี ฯลฯ)\n• ลงประกาศและค้นหาอสังหาริมทรัพย์ (คอนโด บ้าน ทาวน์เฮาส์ ที่ดิน พาณิชย์ อพาร์ทเมนท์)",
     s3t: "3. บัญชีผู้ใช้และการลงทะเบียน",
-    s3: "ผู้ใช้ต้องให้ข้อมูลที่ถูกต้องและครบถ้วนในการลงทะเบียน คุณรับผิดชอบในการรักษาความลับของข้อมูลบัญชี Cblue or blue ขอสงวนสิทธิ์ในการระงับหรือยกเลิกบัญชีที่ละเมิดข้อกำหนดหรือมีการฉ้อโกง",
+    s3: "ผู้ใช้ต้องให้ข้อมูลที่ถูกต้องและครบถ้วนในการลงทะเบียน คุณรับผิดชอบในการรักษาความลับของข้อมูลบัญชี การใช้งานที่ยอมรับได้ต้องเป็นไปโดยชอบด้วยกฎหมาย สุจริต และเคารพผู้อื่น ห้ามส่งข้อมูลเท็จ ใช้ระบบสื่อสารหรือไฟล์ในทางที่ผิด รบกวนการทำงานของบริการ พยายามเข้าถึงโดยไม่ได้รับอนุญาต หรือใช้ CBLUE เพื่อกิจกรรมที่ผิดกฎหมาย ฉ้อโกง ก่อกวน หรือเป็นอันตราย Cblue or blue ขอสงวนสิทธิ์ในการระงับหรือยกเลิกบัญชีที่ละเมิดข้อกำหนดหรือมีการฉ้อโกง",
     s4t: "4. การจองและการชำระเงิน",
     s4: "เมื่อจองช่างหรือมืออาชีพ จะมีค่าธรรมเนียมดำเนินการตามระดับที่เลือก:\n• Economy: ฿100\n• Standard: ฿400\n• Corporate / Upper: ฿600\n• Specialist / Manager / Luxury: ฿800\n• Expert / Director / Grandeur: ฿1,000\n\nชำระเงินผ่าน PromptPay QR ค่าธรรมเนียมไม่สามารถขอคืนได้หลังจากช่าง/มืออาชีพยืนยันการจองแล้ว ยกเว้นตามที่กฎหมายกำหนด",
     s5t: "5. ข้อผูกพันของช่างและมืออาชีพ",
@@ -80,7 +80,7 @@ const T: Record<string, Record<string, string>> = {
     s2t: "2. 提供的服务",
     s2: "Cblue or blue 提供一个市场平台，连接客户与经过认证的技工、专业人员和房地产服务提供商。服务包括：\n• 家庭维修预约（水管、电气、空调、室内装饰、园艺、屋顶/外墙）\n• 项目服务（网站开发、AI、太阳能、智能建筑、绿色建筑等）\n• 专业服务（律师、建筑师、工程师、会计师等）\n• 房地产发布和搜索（公寓、别墅、联排、土地、商业、公寓）",
     s3t: "3. 用户账户与注册",
-    s3: "用户必须在注册时提供准确完整的信息。您有责任维护账户凭据的保密性。Cblue or blue 保留暂停或终止违反条款或从事欺诈活动的账户的权利。",
+    s3: "用户必须在注册时提供准确完整的信息，并负责维护账户凭据的保密性。可接受的使用方式必须合法、诚实并尊重他人；不得提交虚假信息、滥用通信或文件、干扰服务运行、尝试未经授权的访问，或将 CBLUE 用于违法、欺诈、骚扰或有害活动。Cblue or blue 保留暂停或终止违反条款或从事欺诈活动的账户的权利。",
     s4t: "4. 预约与付款",
     s4: "预约技工或专业人员时，需根据所选等级支付处理费：\n• Economy: ฿100\n• Standard: ฿400\n• Corporate / Upper: ฿600\n• Specialist / Manager / Luxury: ฿800\n• Expert / Director / Grandeur: ฿1,000\n\n通过 PromptPay QR 支付。技工/专业人员确认预约后，费用不可退还，法律规定除外。",
     s5t: "5. 技工与专业人员义务",
@@ -132,9 +132,17 @@ export default function TermsPage() {
             </div>
           ))}
           <div className="text-center pt-4">
-            <Link href={`${prefix}/privacy`} className="text-sm text-sky-600 hover:underline">
-              {locale === "th" ? "ดูนโยบายความเป็นส่วนตัว →" : locale === "zh" ? "查看隐私政策 →" : "View Privacy Policy →"}
-            </Link>
+            <div className="flex flex-wrap justify-center gap-4 text-sm">
+              <Link href={`${prefix}/privacy`} className="text-sky-600 hover:underline">
+                {locale === "th" ? "นโยบายความเป็นส่วนตัว" : locale === "zh" ? "隐私政策" : "Privacy Policy"}
+              </Link>
+              <Link href={`${prefix}/refund-policy`} className="text-sky-600 hover:underline">
+                {locale === "th" ? "นโยบายการคืนเงิน" : locale === "zh" ? "退款政策" : "Refund Policy"}
+              </Link>
+              <Link href={`${prefix}/retention-policy`} className="text-sky-600 hover:underline">
+                {locale === "th" ? "นโยบายการเก็บรักษาข้อมูล" : locale === "zh" ? "数据保留政策" : "Data Retention Policy"}
+              </Link>
+            </div>
           </div>
         </div>
       </section>
